@@ -2790,8 +2790,8 @@ void CheckRequiredFiles (void)
 				iPoP1SNES = 0;
 			} else { iPoP1SNES = 1; }
 		}
+		closedir (dDir);
 	}
-	closedir (dDir);
 
 	/*** PR ***/
 	if (((access (PR_EXECUTABLE, R_OK) == -1) &&
@@ -36429,8 +36429,8 @@ snprintf (sNativeFile[iDir], MAX_FILE, "%s", sRegular);
 				}
 			}
 		}
+		closedir (dDir);
 	}
-	closedir (dDir);
 
 	return (iReturn);
 }

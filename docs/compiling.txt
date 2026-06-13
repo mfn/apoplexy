@@ -7,6 +7,67 @@ Prerequisites:
 
 $ make
 
+===[macOS]=====================================================================
+
+Tested on: macOS 26 (Intel x86_64), Apple Clang via the `gcc` symlink, Xcode
+Command Line Tools installed.
+
+Dependencies are managed project-locally via vcpkg in manifest mode. Nothing
+is installed system-wide except a single build-time tool (pkg-config), which
+is needed by vcpkg itself, not by apoplexy.
+
+Prerequisites:
+- Xcode Command Line Tools (provides clang, make, git, the macOS SDK, and
+  the system libcurl that apoplexy links against).
+- pkg-config (a small build-time tool used by vcpkg's port-fixup step):
+  $ brew install pkg-config
+
+Build:
+  $ ./scripts/build-macos.sh
+
+The script:
+- Auto-clones vcpkg into ./.vcpkg/ on first run (gitignored), or honors
+  $VCPKG_ROOT if set.
+- Resolves SDL2, SDL2_image, SDL2_ttf, libzip from vcpkg.json and installs
+  them into ./vcpkg_installed/<triplet>/ (gitignored).
+- Generates a sdl2-config shim (./.vcpkg-shim/, gitignored) so the existing
+  src/Makefile picks up the full transitive static link line via pkg-config
+  without any Makefile changes.
+- Builds Princed Resources (PR) from pr/PR-1.3.1-prerelease.ZIP into
+  ./pr/pr-darwin (gitignored). The repo ships pre-built pr/pr (Linux ELF
+  32-bit) and pr/pr.exe (Windows PE32) but no native macOS binary; without
+  one, apoplexy cannot import/export PoP1/PoP2 DOS .DAT files at runtime.
+  src/apoplexy.c's PR_EXECUTABLE define points at pr/pr-darwin on Darwin.
+- Runs `make -C src`. Binary lands at the repo root as ./apoplexy.
+
+The first run compiles SDL2 et al from source (typically several minutes).
+Subsequent runs reuse vcpkg's binary cache and are fast.
+
+The resulting binary statically links SDL2/SDL2_image/SDL2_ttf/libzip and
+their transitive deps; `otool -L ./apoplexy` should show only macOS system
+frameworks and /usr/lib/libcurl.4.dylib (libcurl is intentionally taken from
+the macOS SDK rather than vcpkg).
+
+Note on PR's endianness: PR's Makefile auto-detects Darwin and sets
+-DMACOS, which selects byte-swapping fread/fwrite shims in disk.c written
+for 2003-era big-endian PowerPC Macs. On Intel/Apple Silicon Macs (both
+little-endian) those shims corrupt every 32-bit field PR writes; .plv
+files come out big-endian and apoplexy rejects them with "Level has an
+incorrect size". scripts/build-macos.sh works around this by passing
+LINUX=-DNOLINUX to PR's make, which drops -DMACOS while keeping the
+non-Linux getopt port. No PR source patch needed.
+
+Apple Silicon (arm64): the script auto-detects `uname -m` and selects the
+arm64-osx triplet; the same recipe should work but has not been verified
+upstream.
+
+Upgrading dependency versions:
+The "builtin-baseline" SHA in vcpkg.json pins the entire dep set to a vcpkg
+commit. To upgrade, pick a newer SHA from the microsoft/vcpkg history,
+update vcpkg.json, and re-run the script. To pin one specific dep against
+the baseline, add an "overrides" entry; to require a minimum version, use
+"version>=". See https://learn.microsoft.com/vcpkg/users/versioning .
+
 ===[Windows]===================================================================
 
 The following instructions are to compile 32-bit.

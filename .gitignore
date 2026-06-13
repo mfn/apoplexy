@@ -8,6 +8,17 @@ xml/*
 # Executables.
 /apoplexy
 /apoplexy.exe
+/apoplexy.dSYM/
+
+# vcpkg (project-local toolchain + installed deps for the macOS build).
+/.vcpkg/
+/.vcpkg-shim/
+/vcpkg_installed/
+
+# PR (Princed Resources) macOS build (no upstream binary; built from
+# pr/PR-1.3.1-prerelease.ZIP by scripts/build-macos.sh).
+/.pr-build/
+/pr/pr-darwin
 
 # Created by IDE's, in particular Dev-C++.
 /src/apoplexy.dev

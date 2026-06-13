@@ -201,7 +201,11 @@
 #define HERE "./"
 #define DEVNULL "/dev/null"
 #define COPY "cp"
+#if defined __APPLE__
+#define PR_EXECUTABLE "pr" SLASH "pr-darwin"
+#else
 #define PR_EXECUTABLE "pr" SLASH "pr"
+#endif
 #define BATCH_FILE_NATIVE "apoplexy.sh"
 #endif
 

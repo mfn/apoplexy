@@ -1,0 +1,12 @@
+{
+	"name": "apoplexy",
+	"version-string": "3.18",
+	"$comment": "On macOS, libcurl is provided by the system SDK and is intentionally not listed here; only SDL2/SDL2_image/SDL2_ttf/libzip are managed by vcpkg.",
+	"dependencies": [
+		"sdl2",
+		"sdl2-image",
+		"sdl2-ttf",
+		"libzip"
+	],
+	"builtin-baseline": "44819aa2a6c10e56065e2b0330e7d6c89d1d2574"
+}

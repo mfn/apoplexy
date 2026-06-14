@@ -57,7 +57,5 @@ jobs:
       - name: Build apoplexy
         run: bash scripts/build-windows-msys2.sh
 
-      - name: Inspect binary
-        run: |
-          test -s apoplexy.exe
-          file apoplexy.exe
+      - name: Check binary version
+        run: ./apoplexy.exe --version

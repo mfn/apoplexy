@@ -2431,7 +2431,6 @@ int main (int argc, char *argv[])
 	iIgnoreTab = 0;
 
 	CheckSSE();
-	CheckLatest();
 
 	if (argc > 1)
 	{
@@ -2605,6 +2604,7 @@ int main (int argc, char *argv[])
 			}
 		}
 	}
+	CheckLatest();
 	srand ((unsigned)time(&tm));
 
 	/*** Show the SDL version used for compiling and linking. ***/

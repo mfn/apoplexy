@@ -17,6 +17,8 @@ The format is based on Keep a Changelog. Historical release labels such as
   intentional background-rendering branch.
 
 ### Changed
+- Moved the remote update check after command-line handling so commands like
+  `apoplexy --version` exit without making an HTTP request.
 - Moved the `cppcheck` target from `src/Makefile` into CMake.
 - Updated macOS and MSYS2 UCRT64 build scripts to build through CMake.
 - On Darwin, apoplexy now uses `pr/pr-darwin` as the PR executable.

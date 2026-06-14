@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Build apoplexy for 32-bit Windows from an MSYS2 MINGW32 shell.
+# Build apoplexy for 64-bit Windows from an MSYS2 UCRT64 shell.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
-if [[ "${MSYSTEM-}" != "MINGW32" ]]; then
+if [[ "${MSYSTEM-}" != "UCRT64" ]]; then
 	printf '%s\n' \
-		"scripts/build-windows-msys2.sh must run in an MSYS2 MINGW32 shell." \
+		"scripts/build-windows-msys2.sh must run in an MSYS2 UCRT64 shell." \
 		>&2
 	exit 1
 fi

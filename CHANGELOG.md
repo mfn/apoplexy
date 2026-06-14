@@ -12,6 +12,8 @@ The format is based on Keep a Changelog. Historical release labels such as
   using project-local vcpkg dependencies and `vcpkg.json`.
 - Added a macOS build path for Princed Resources, producing `pr/pr-darwin`
   from the bundled PR source archive.
+- Added cppcheck static analysis with a baseline suppression for the current
+  intentional background-rendering branch.
 
 ### Changed
 - On Darwin, apoplexy now uses `pr/pr-darwin` as the PR executable.

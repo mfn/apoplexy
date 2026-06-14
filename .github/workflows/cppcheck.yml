@@ -1,0 +1,40 @@
+name: Cppcheck
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/cppcheck.yml
+      - src/**
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/cppcheck.yml
+      - src/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up cppcheck
+        uses: mamba-org/setup-micromamba@v3
+        with:
+          environment-name: cppcheck
+          create-args: >-
+            cppcheck=2.21.0
+
+      - name: Run cppcheck
+        shell: micromamba-shell {0}
+        run: |
+          cppcheck --version
+          make -C src cppcheck

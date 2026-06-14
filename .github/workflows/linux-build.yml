@@ -40,3 +40,8 @@ jobs:
 
       - name: Build apoplexy
         run: make -C src
+
+      - name: Inspect binary
+        run: |
+          test -x apoplexy
+          file apoplexy

@@ -40,3 +40,8 @@ jobs:
 
       - name: Build apoplexy
         run: ./scripts/build-macos.sh
+
+      - name: Inspect binary
+        run: |
+          test -x apoplexy
+          file apoplexy

@@ -1,0 +1,55 @@
+name: Windows build
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/windows-build.yml
+      - scripts/build-windows-msys2.sh
+      - src/**
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/windows-build.yml
+      - scripts/build-windows-msys2.sh
+      - src/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            file
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-SDL2_image
+            mingw-w64-ucrt-x86_64-SDL2_ttf
+            mingw-w64-ucrt-x86_64-curl
+            mingw-w64-ucrt-x86_64-libzip
+
+      - name: Build apoplexy
+        run: bash scripts/build-windows-msys2.sh
+
+      - name: Inspect binary
+        run: |
+          test -s apoplexy.exe
+          file apoplexy.exe

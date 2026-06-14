@@ -3,12 +3,14 @@ name: Cppcheck
 on:
   pull_request:
     paths:
+      - CMakeLists.txt
       - .github/workflows/cppcheck.yml
       - src/**
   push:
     branches:
       - master
     paths:
+      - CMakeLists.txt
       - .github/workflows/cppcheck.yml
       - src/**
   workflow_dispatch:
@@ -37,4 +39,5 @@ jobs:
         shell: micromamba-shell {0}
         run: |
           cppcheck --version
-          make -C src cppcheck
+          cmake -S . -B build/cppcheck -DAPOPLEXY_BUILD_APP=OFF
+          cmake --build build/cppcheck --target cppcheck

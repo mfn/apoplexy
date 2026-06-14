@@ -3,12 +3,14 @@ name: Linux build
 on:
   pull_request:
     paths:
+      - CMakeLists.txt
       - .github/workflows/linux-build.yml
       - src/**
   push:
     branches:
       - master
     paths:
+      - CMakeLists.txt
       - .github/workflows/linux-build.yml
       - src/**
   workflow_dispatch:
@@ -31,7 +33,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends --no-upgrade \
             gcc \
+            cmake \
             make \
+            pkg-config \
             libsdl2-dev \
             libsdl2-image-dev \
             libsdl2-ttf-dev \
@@ -39,7 +43,9 @@ jobs:
             libzip-dev
 
       - name: Build apoplexy
-        run: make -C src
+        run: |
+          cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build/linux
 
       - name: Inspect binary
         run: |

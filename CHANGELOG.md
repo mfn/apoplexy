@@ -8,6 +8,7 @@ The format is based on Keep a Changelog. Historical release labels such as
 ## Unreleased
 
 ### Added
+- Added a unified CMake build for Linux, macOS, and MSYS2 UCRT64 Windows.
 - Added first-class macOS build support through `scripts/build-macos.sh`,
   using project-local vcpkg dependencies and `vcpkg.json`.
 - Added a macOS build path for Princed Resources, producing `pr/pr-darwin`
@@ -16,6 +17,8 @@ The format is based on Keep a Changelog. Historical release labels such as
   intentional background-rendering branch.
 
 ### Changed
+- Moved the `cppcheck` target from `src/Makefile` into CMake.
+- Updated macOS and MSYS2 UCRT64 build scripts to build through CMake.
 - On Darwin, apoplexy now uses `pr/pr-darwin` as the PR executable.
 - Documented macOS build prerequisites and the project-local dependency layout.
 

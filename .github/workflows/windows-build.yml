@@ -3,6 +3,7 @@ name: Windows build
 on:
   pull_request:
     paths:
+      - CMakeLists.txt
       - .github/workflows/windows-build.yml
       - scripts/build-windows-msys2.sh
       - src/**
@@ -10,6 +11,7 @@ on:
     branches:
       - master
     paths:
+      - CMakeLists.txt
       - .github/workflows/windows-build.yml
       - scripts/build-windows-msys2.sh
       - src/**
@@ -39,6 +41,8 @@ jobs:
           install: >-
             file
             mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-SDL2
             mingw-w64-ucrt-x86_64-SDL2_image

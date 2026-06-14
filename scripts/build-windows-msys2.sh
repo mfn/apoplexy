@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Build apoplexy for 64-bit Windows from an MSYS2 UCRT64 shell.
+# Build apoplexy for 64-bit Windows from an MSYS2 UCRT64 shell with CMake.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$repo_root"
 
 if [[ "${MSYSTEM-}" != "UCRT64" ]]; then
 	printf '%s\n' \
@@ -14,31 +13,17 @@ if [[ "${MSYSTEM-}" != "UCRT64" ]]; then
 	exit 1
 fi
 
-aPkg=(sdl2 SDL2_image SDL2_ttf libcurl libzip)
-aPkgLibs=(SDL2_image SDL2_ttf libcurl libzip sdl2)
+if ! command -v cmake >/dev/null 2>&1; then
+	printf '%s\n' \
+		"cmake was not found. Install mingw-w64-ucrt-x86_64-cmake." \
+		>&2
+	exit 1
+fi
 
-pkg-config --print-errors --exists "${aPkg[@]}"
-read -r -a aPkgCFlags <<< "$(pkg-config --cflags "${aPkg[@]}")"
-read -r -a aPkgLFlags <<< "$(pkg-config --libs "${aPkgLibs[@]}")"
-
-gcc \
-	-O2 \
-	-Wno-unused-result \
-	-std=c99 \
-	-g \
-	-pedantic \
-	-Wall \
-	-Wextra \
-	-Wshadow \
-	-Wpointer-arith \
-	-Wcast-qual \
-	-Wstrict-prototypes \
-	-Wmissing-prototypes \
-	-D_REENTRANT \
-	"${aPkgCFlags[@]}" \
-	src/apoplexy.c \
-	-o apoplexy.exe \
-	"${aPkgLFlags[@]}" \
-	-lm \
-	-Wno-format-truncation \
-	-Wno-stringop-overflow
+build_dir="$repo_root/build/windows-ucrt64"
+cmake \
+	-S "$repo_root" \
+	-B "$build_dir" \
+	-G Ninja \
+	-DCMAKE_BUILD_TYPE=RelWithDebInfo
+exec cmake --build "$build_dir"

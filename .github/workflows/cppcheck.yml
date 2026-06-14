@@ -26,11 +26,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends --no-upgrade \
-            cppcheck
+      - name: Set up cppcheck
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: cppcheck
+          create-args: >-
+            cppcheck=2.21.0
 
       - name: Run cppcheck
-        run: make -C src cppcheck
+        shell: micromamba-shell {0}
+        run: |
+          cppcheck --version
+          make -C src cppcheck

@@ -287,7 +287,8 @@ Examples:
 | <kbd>Shift</kbd> + <kbd>Up</kbd> | Go to a higher room. |
 | <kbd>Shift</kbd> + <kbd>Down</kbd> | Go to a lower room. |
 | <kbd>Shift</kbd> + <kbd>Left Mouse</kbd> | Re-use the last used tile. |
-| <kbd>Shift</kbd> + <kbd>Mouse Wheel</kbd> | Scroll horizontally. |
+| <kbd>Mouse Wheel</kbd> | Go to the room above or below. |
+| <kbd>Shift</kbd> + <kbd>Mouse Wheel</kbd> | Go to the room to the left or right. |
 | <kbd>-</kbd>, <kbd>_</kbd> | Go to the previous level. |
 | <kbd>+</kbd>, <kbd>=</kbd> | Go to the next level. |
 | <kbd>/</kbd>, <kbd>?</kbd> | Clear the entire room. |
@@ -321,6 +322,8 @@ Examples:
 | --- | --- |
 | <kbd>D</kbd> | Playtest using DOSBox, ZSNES, or native runtime. |
 | <kbd>E</kbd> | Go to the events screen. |
+| <kbd>J</kbd> | Jump to a room. |
+| <kbd>L</kbd> | Jump to a level. |
 | <kbd>M</kbd> | PoP1: open the Map window. |
 | <kbd>Q</kbd>, <kbd>Esc</kbd> | Go to the main screen. |
 | <kbd>R</kbd> | Modify broken room links. |
@@ -341,13 +344,15 @@ Examples:
 | --- | --- |
 | <kbd>Enter</kbd>, <kbd>Return</kbd>, <kbd>Space</kbd> | Increase adjacent room number. |
 | <kbd>Backspace</kbd> | Decrease adjacent room number. |
-| Arrow keys | Select adjacent room. |
+| Arrow keys | Select the side, then the adjacent room. |
 
 ### Events Screen
 
 | Key or input | Action |
 | --- | --- |
 | <kbd>D</kbd> | Playtest using DOSBox, ZSNES, or native runtime. |
+| <kbd>J</kbd> | Jump to a room. |
+| <kbd>L</kbd> | Jump to a level. |
 | <kbd>M</kbd> | PoP1: open the Map window. |
 | <kbd>N</kbd> | PoP1: check the box under `N`. |
 | <kbd>Q</kbd>, <kbd>Esc</kbd> | Go to the main screen. |
@@ -378,7 +383,7 @@ Examples:
 | <kbd>G</kbd> | PoP2: change guards. |
 | <kbd>J</kbd> | PoP2: change jumps. |
 | <kbd>L</kbd> | PoP1 SNES stuck tile: harmless. |
-| <kbd>M</kbd> | PoP2: change music. |
+| <kbd>M</kbd> | PoP2: change music. PoP1 SNES green: change the teleport marker. |
 | <kbd>N</kbd> | PoP1 SNES stuck tile: no. |
 | <kbd>O</kbd> | Open custom tiles editor. |
 | <kbd>P</kbd> | PoP2: change percent open. |
@@ -412,11 +417,11 @@ Examples:
 | Key or input | Action |
 | --- | --- |
 | <kbd>F</kbd> | PoP1 SNES attributes: floor. |
-| <kbd>N</kbd> | PoP1/PoP2 DOS: change foreground modifier. |
+| <kbd>N</kbd> | PoP1/PoP2 DOS: set the foreground modifier to no. |
 | <kbd>Q</kbd>, <kbd>Esc</kbd>, <kbd>C</kbd> | Back to the tiles screen. |
 | <kbd>S</kbd> | PoP1 SNES attributes: space. |
 | <kbd>X</kbd> | PoP1 DOS: go to the native tiles. |
-| <kbd>Y</kbd> | PoP1/PoP2 DOS: change foreground modifier. |
+| <kbd>Y</kbd> | PoP1/PoP2 DOS: set the foreground modifier to yes. |
 | <kbd>W</kbd> | PoP1 SNES attributes: wall. |
 | <kbd>Enter</kbd>, <kbd>Return</kbd>, <kbd>Space</kbd> | Use the custom tile. |
 | <kbd>Left</kbd> | PoP1/PoP2 DOS: decrease foreground code. PoP1 SNES: decrease object. |

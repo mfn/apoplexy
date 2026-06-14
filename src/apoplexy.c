@@ -32477,6 +32477,7 @@ void Backgrounds (void)
 	/*** left of this room ***/
 	if ((iRoomConnections[iCurRoom][1] != 0) && (iEditPoP != 3))
 	{
+		/* cppcheck-suppress identicalInnerCondition */
 		if (iEditPoP != 3)
 		{
 			iModifier[0] = iModifierA[iRoomConnections[iCurRoom][1]][9][1];

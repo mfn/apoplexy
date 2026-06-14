@@ -125,7 +125,7 @@ set(APOPLEXY_CPPCHECK_FLAGS
 	--verbose
 	--max-configs=1
 	--enable=warning,performance,portability
-	--suppressions-list=cppcheck-suppressions.txt
+	--inline-suppr
 	--error-exitcode=1)
 
 set(APOPLEXY_EXTRA_CPPCHECK_FLAGS_LIST "")

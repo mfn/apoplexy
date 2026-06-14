@@ -51,7 +51,5 @@ jobs:
           cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=RelWithDebInfo
           cmake --build build/linux
 
-      - name: Inspect binary
-        run: |
-          test -x apoplexy
-          file apoplexy
+      - name: Check binary version
+        run: ./apoplexy --version

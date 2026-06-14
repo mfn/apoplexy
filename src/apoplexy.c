@@ -11814,6 +11814,7 @@ void InitScreen (void)
 	SDL_Event event;
 	SDL_Surface *imgicon;
 	SDL_AudioSpec fmt;
+	Uint32 iWindowFlags;
 	int iTemp2;
 	int iOldXPos, iOldYPos;
 	const Uint8 *keystate;
@@ -11852,9 +11853,10 @@ void InitScreen (void)
 	atexit (SDL_Quit);
 
 	/*** main window ***/
+	iWindowFlags = SDL_WINDOW_RESIZABLE | iFullscreen;
 	window = SDL_CreateWindow (EDITOR_NAME " " EDITOR_VERSION,
 		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-		(WINDOW_WIDTH) * iScale, (WINDOW_HEIGHT) * iScale, iFullscreen);
+		(WINDOW_WIDTH) * iScale, (WINDOW_HEIGHT) * iScale, iWindowFlags);
 	if (window == NULL)
 	{
 		printf ("[FAILED] Unable to create main window: %s!\n", SDL_GetError());
@@ -11862,6 +11864,7 @@ void InitScreen (void)
 	}
 	iWindowID = SDL_GetWindowID (window);
 	iActiveWindowID = iWindowID;
+	SDL_SetWindowMinimumSize (window, WINDOW_WIDTH, WINDOW_HEIGHT);
 	ascreen = SDL_CreateRenderer (window, -1, 0);
 	if (ascreen == NULL)
 	{
@@ -11887,11 +11890,8 @@ void InitScreen (void)
 
 	/*** Some people may prefer linear, but we're going old school. ***/
 	SDL_SetHint (SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-	if (iFullscreen != 0)
-	{
-		SDL_RenderSetLogicalSize (ascreen, (WINDOW_WIDTH) * iScale,
-			(WINDOW_HEIGHT) * iScale);
-	}
+	SDL_RenderSetLogicalSize (ascreen, (WINDOW_WIDTH) * iScale,
+		(WINDOW_HEIGHT) * iScale);
 
 	if (TTF_Init() == -1)
 	{
@@ -15778,6 +15778,8 @@ void InitScreen (void)
 				case SDL_WINDOWEVENT:
 					switch (event.window.event)
 					{
+						case SDL_WINDOWEVENT_SIZE_CHANGED:
+						case SDL_WINDOWEVENT_RESIZED:
 						case SDL_WINDOWEVENT_EXPOSED:
 							ShowScreen (iScreen, ascreen); break;
 						case SDL_WINDOWEVENT_CLOSE:
@@ -30575,6 +30577,23 @@ void CheckCodes (char *sHex, int iFdEXE)
 void Zoom (int iToggleFull)
 /*****************************************************************************/
 {
+	static int iWindowedWidth = 0;
+	static int iWindowedHeight = 0;
+	int iOldScale;
+	int iNewWidth;
+	int iNewHeight;
+
+	iOldScale = iScale;
+	if (iWindowedWidth == 0)
+	{
+		iWindowedWidth = (WINDOW_WIDTH) * iScale;
+		iWindowedHeight = (WINDOW_HEIGHT) * iScale;
+	}
+	if (iFullscreen == 0)
+	{
+		SDL_GetWindowSize (window, &iWindowedWidth, &iWindowedHeight);
+	}
+
 	if (iToggleFull == 1)
 	{
 		if (iFullscreen == 0)
@@ -30595,12 +30614,18 @@ void Zoom (int iToggleFull)
 	}
 
 	SDL_SetWindowFullscreen (window, iFullscreen);
-	SDL_SetWindowSize (window, (WINDOW_WIDTH) * iScale,
-		(WINDOW_HEIGHT) * iScale);
+	if (iFullscreen == 0)
+	{
+		iNewWidth = (iWindowedWidth * iScale) / iOldScale;
+		iNewHeight = (iWindowedHeight * iScale) / iOldScale;
+		SDL_SetWindowSize (window, iNewWidth, iNewHeight);
+		iWindowedWidth = iNewWidth;
+		iWindowedHeight = iNewHeight;
+		SDL_SetWindowPosition (window, SDL_WINDOWPOS_CENTERED,
+			SDL_WINDOWPOS_CENTERED);
+	}
 	SDL_RenderSetLogicalSize (ascreen, (WINDOW_WIDTH) * iScale,
 		(WINDOW_HEIGHT) * iScale);
-	SDL_SetWindowPosition (window, SDL_WINDOWPOS_CENTERED,
-		SDL_WINDOWPOS_CENTERED);
 	TTF_CloseFont (font1);
 	TTF_CloseFont (font2);
 	TTF_CloseFont (font3);

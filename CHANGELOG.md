@@ -8,6 +8,8 @@ The format is based on Keep a Changelog. Historical release labels such as
 ## Unreleased
 
 ### Added
+- Added resizing for the main editor window, scaling the fixed interface as a
+  custom zoom level.
 - Added a unified CMake build for Linux, macOS, and MSYS2 UCRT64 Windows.
 - Added first-class macOS build support through `scripts/build-macos.sh`,
   using project-local vcpkg dependencies and `vcpkg.json`.

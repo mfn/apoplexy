@@ -10,7 +10,8 @@ CPPCHECK_FLAGS =
 
 cppcheck:
 	cppcheck --language=c --std=c99 --verbose --max-configs=1 \
-		--enable=warning,performance,portability --error-exitcode=1 \
+		--enable=warning,performance,portability \
+		--suppressions-list=cppcheck-suppressions.txt --error-exitcode=1 \
 		$(CPPCHECK_FLAGS) apoplexy.c
 
 .PHONY: all cppcheck

@@ -510,7 +510,7 @@ More v2.0 screenshots are on [popot.org](https://www.popot.org/news.php?id=apopl
 
 ## Building
 
-When building from source, run commands from the top-level source directory unless a step says otherwise. The Makefile is in `src/` and writes the binary to the top-level source directory as `./apoplexy`, not into `src/`.
+When building from source, run commands from the top-level source directory unless a step says otherwise. CMake writes the binary to the top-level source directory as `./apoplexy` or `./apoplexy.exe`, not into `src/`.
 
 ### GNU/Linux
 
@@ -518,30 +518,32 @@ Install prerequisites:
 
 | Dependency | Common Debian/Ubuntu package |
 | --- | --- |
+| CMake | `cmake` |
+| pkg-config | `pkg-config` |
 | SDL2 | `libsdl2-dev` |
 | SDL2_image | `libsdl2-image-dev` |
 | SDL2_ttf | `libsdl2-ttf-dev` |
 | cURL | `libcurl4-openssl-dev` |
 | libzip | `libzip-dev` |
 
-Build from the top-level source directory:
+Build:
 
 ```bash
-make -C src
+cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build/linux
 ```
 
-Equivalent build from `src/`:
+Run cppcheck through the same build tree:
 
 ```bash
-cd src
-make
+cmake --build build/linux --target cppcheck
 ```
 
 The output binary is `./apoplexy` in the top-level source directory.
 
 ### macOS
 
-The native macOS build uses project-local vcpkg dependencies and leaves the existing `src/Makefile` unchanged.
+The native macOS build uses project-local vcpkg dependencies and CMake.
 
 Tested environment: macOS 26 on Intel `x86_64`, Apple Clang through the `gcc` symlink, and Xcode Command Line Tools installed.
 
@@ -550,12 +552,13 @@ Prerequisites:
 | Requirement | Purpose |
 | --- | --- |
 | Xcode Command Line Tools | Provides clang, make, git, the macOS SDK, and the system libcurl used by apoplexy. |
+| CMake | Configures and builds apoplexy. |
 | `pkg-config` | Build-time tool used by vcpkg's port-fixup step. |
 
-Install `pkg-config` with Homebrew:
+Install CMake and `pkg-config` with Homebrew:
 
 ```bash
-brew install pkg-config
+brew install cmake pkg-config
 ```
 
 Build:
@@ -571,9 +574,8 @@ The script performs these steps:
 | vcpkg checkout | Auto-clones vcpkg into `./.vcpkg/` on first run, or uses `$VCPKG_ROOT` when set. |
 | Dependencies | Resolves `sdl2`, `sdl2-image`, `sdl2-ttf`, and `libzip` from `vcpkg.json`. libcurl intentionally comes from the macOS SDK. |
 | Install tree | Installs libraries into `./vcpkg_installed/<triplet>/`, where the triplet is `x64-osx` or `arm64-osx`. |
-| SDL shim | Generates `./.vcpkg-shim/sdl2-config` so the existing Makefile receives the full static transitive link line from `pkg-config --static`. |
 | Princed Resources | Builds PR from `pr/PR-1.3.1-prerelease.ZIP` into `./pr/pr-darwin`. |
-| apoplexy | Runs `make -C src`; the final binary is `./apoplexy`. |
+| apoplexy | Runs CMake in `./build/macos-<triplet>/`; the final binary is `./apoplexy`. |
 
 The first run may take several minutes because SDL2 and related dependencies are compiled from source. Subsequent runs reuse vcpkg's binary cache and should be much faster.
 
@@ -603,220 +605,47 @@ Upgrading macOS dependencies:
 
 See the [vcpkg versioning documentation](https://learn.microsoft.com/vcpkg/users/versioning) for details.
 
-### Windows 32-bit Build
+### Windows MSYS2 UCRT64
 
-The Windows build instructions target a 32-bit Dev-C++ toolchain.
+The supported Windows source build uses the 64-bit MSYS2 UCRT64 environment.
 
-<details>
-<summary>Full Windows build instructions</summary>
-
-#### 1. Set up Dev-C++
-
-Download Dev-C++ 5.11 with TDM-GCC 4.9.2:
-
-| Source | URL |
-| --- | --- |
-| SourceForge project | https://sourceforge.net/projects/orwelldevcpp/files/Setup%20Releases/ |
-| Direct mirror path | https://downloads.sourceforge.net/project/orwelldevcpp/Setup%20Releases/ |
-
-Install `Dev-Cpp 5.11 TDM-GCC 4.9.2 Setup.exe` by running the installer.
-
-#### 2. Install SDL2 MinGW libraries
-
-Download:
-
-| Library | File |
-| --- | --- |
-| SDL2 | https://libsdl.org/release/SDL2-devel-2.0.7-mingw.tar.gz |
-| SDL2_ttf | https://libsdl.org/projects/SDL_ttf/release/SDL2_ttf-devel-2.0.14-mingw.tar.gz |
-| SDL2_image | https://libsdl.org/projects/SDL_image/release/SDL2_image-devel-2.0.2-mingw.tar.gz |
-
-Unpack all packages.
-
-For all three packages, copy the `i686-w64-mingw32/` directories into the Dev-C++ `MinGW64/` directory. Use the `zlib1.dll` from SDL2_image, not the one from SDL2_ttf.
-
-GNU/Linux users running Wine can find the Dev-C++ directory at:
-
-```text
-~/.wine/drive_c/Program Files (x86)/Dev-Cpp/MinGW64/
-```
-
-Copy DLL files from:
-
-```text
-Dev-Cpp/MinGW64/i686-w64-mingw32/bin/
-```
-
-to the apoplexy directory. You do not need `libjpeg-9.dll`, `libtiff-5.dll`, or `libwebp-7.dll`.
-
-#### 3. Install cURL's MinGW library
-
-Download:
-
-```text
-https://curl.haxx.se/gknw.net/rm/7.39.0/dist-w32/curl-7.39.0-devel-mingw32.zip
-```
-
-Unpack the package.
-
-Copy its `bin/`, `include/`, and `lib/` directories into:
-
-```text
-Dev-Cpp/MinGW64/i686-w64-mingw32/
-```
-
-Do not overwrite existing files.
-
-Copy these files from `Dev-Cpp/MinGW64/i686-w64-mingw32/bin/` to the apoplexy directory:
-
-| DLL |
-| --- |
-| `libcurl.dll` |
-| `libidn-11.dll` |
-| `libeay32.dll` |
-| `ssleay32.dll` |
-
-#### 4. Install libzip's MinGW library
-
-Download:
-
-```text
-https://kojipkgs.fedoraproject.org//packages/mingw-libzip/1.1.3/1.fc25/noarch/mingw32-libzip-1.1.3-1.fc25.noarch.rpm
-```
-
-Newer versions may make `libzip-5.dll` complain about a missing `libbz2-1.dll` file.
-
-Use 7-Zip to unpack the RPM file. On GNU/Linux:
+Install prerequisites from an MSYS2 UCRT64 shell:
 
 ```bash
-7z x mingw32-libzip-1.1.3-1.fc25.noarch.rpm
-cpio -idv < mingw32-libzip-1.1.3-1.fc25.noarch.cpio
+pacman -S --needed \
+  mingw-w64-ucrt-x86_64-gcc \
+  mingw-w64-ucrt-x86_64-cmake \
+  mingw-w64-ucrt-x86_64-ninja \
+  mingw-w64-ucrt-x86_64-pkgconf \
+  mingw-w64-ucrt-x86_64-SDL2 \
+  mingw-w64-ucrt-x86_64-SDL2_image \
+  mingw-w64-ucrt-x86_64-SDL2_ttf \
+  mingw-w64-ucrt-x86_64-curl \
+  mingw-w64-ucrt-x86_64-libzip
 ```
 
-Copy directories from:
+Build from the same UCRT64 shell:
 
-```text
-usr/i686-w64-mingw32/sys-root/mingw/
+```bash
+./scripts/build-windows-msys2.sh
 ```
 
-to:
+Equivalent direct CMake commands:
 
-```text
-Dev-Cpp/MinGW64/i686-w64-mingw32/
+```bash
+cmake -S . -B build/windows-ucrt64 -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build/windows-ucrt64
 ```
 
-You may need to copy:
+The output binary is `./apoplexy.exe` in the top-level source directory.
 
-```text
-Dev-Cpp/MinGW64/i686-w64-mingw32/lib/libzip/include/zipconf.h
+Run cppcheck through the same build tree:
+
+```bash
+cmake --build build/windows-ucrt64 --target cppcheck
 ```
 
-over:
-
-```text
-Dev-Cpp/MinGW64/i686-w64-mingw32/include/zipconf.h
-```
-
-Copy `libzip-4.dll` from `Dev-Cpp/MinGW64/i686-w64-mingw32/bin/` to the apoplexy directory.
-
-#### 5. Add additional DLL files
-
-Download and install GIMP 2.8.22:
-
-```text
-https://download.gimp.org/mirror/pub/gimp/v2.8/windows/gimp-2.8.22-setup.exe
-```
-
-Copy these files to the apoplexy directory:
-
-| Source file |
-| --- |
-| `32/bin/libgcc_s_sjlj-1.dll` |
-| `32/bin/libwinpthread-1.dll` |
-
-#### 6. Create the Dev-C++ project
-
-1. Start Dev-C++.
-2. Open `File` -> `New` -> `Project...`.
-3. Choose `Basic` -> `Console Application`.
-4. Choose `C Project`.
-5. Name the project `apoplexy`.
-6. Save `apoplexy.dev` to `src/`.
-7. Open `Project` -> `Remove From Project...`.
-8. Select `main.c` and press <kbd>Delete</kbd>.
-9. Open `Project` -> `Add To Project...`.
-10. Add `apoplexy.c`.
-
-#### 7. Configure Dev-C++ output
-
-Open `Project` -> `Project Options...` -> `Output` and set `Executable output directory:` to apoplexy's top-level directory.
-
-#### 8. Configure the compiler
-
-Open `Project` -> `Project Options...` -> `Compiler` and set `Base compiler set:` to `TDM-GCC 4.9.2 32-bit Release`. Discard customizations if necessary.
-
-Open `Project` -> `Project Options...` -> `Parameters` and add this to the C compiler field:
-
-```text
--m32 -O2 -Wno-unused-result -std=c99 -pedantic -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual -Wstrict-prototypes -Wmissing-prototypes -D_REENTRANT -lm -lcurl -lzip
-```
-
-Add this to the linker field:
-
-```text
--l"mingw32"
--l"SDL2main"
--l"SDL2.dll"
--l"SDL2_image.dll"
--l"SDL2_ttf.dll"
--l"curldll"
--l"zip.dll"
-```
-
-#### 9. Configure directories
-
-Open `Project` -> `Project Options...` -> `Directories`.
-
-Library directories:
-
-```text
-C:\Program Files (x86)\Dev-Cpp\MinGW64\i686-w64-mingw32\lib
-```
-
-Include directories:
-
-```text
-C:\Program Files (x86)\Dev-Cpp\MinGW64\i686-w64-mingw32\include\SDL2
-C:\Program Files (x86)\Dev-Cpp\MinGW64\i686-w64-mingw32\include
-```
-
-Open `Tools` -> `Compiler Options...` -> `Directories`.
-
-Binaries:
-
-```text
-C:\Program Files (x86)\Dev-Cpp\MinGW64\i686-w64-mingw32\bin
-```
-
-Libraries:
-
-```text
-C:\Program Files (x86)\Dev-Cpp\MinGW64\i686-w64-mingw32\lib
-```
-
-#### 10. Add the icon and compile
-
-Open `Project` -> `Project Options...` -> `General`.
-
-Browse and add:
-
-```text
-png/various/apoplexy_icon.ico
-```
-
-Compile with `Execute` -> `Compile`, or press <kbd>F9</kbd>.
-
-#### Wine and SNES troubleshooting
+#### Wine and SNES Troubleshooting
 
 GNU/Linux users running the Windows build with Wine may see this error while loading SNES editing:
 
@@ -829,8 +658,6 @@ Fix it with:
 ```bash
 winetricks videomemorysize=1024
 ```
-
-</details>
 
 ## Experimental PoP1 Multiplayer Metadata
 
@@ -921,7 +748,7 @@ Include this diagnostic information when possible:
 | --- | --- |
 | `uname -a` | OS and kernel information. |
 | `gcc -v` | Compiler version and configuration. |
-| `sdl2-config --version` | SDL2 version seen by the build. |
+| `pkg-config --modversion sdl2` | SDL2 version seen by the build. |
 | `apoplexy --version` | apoplexy version. |
 
 Feedback channels:

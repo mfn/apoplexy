@@ -10,6 +10,9 @@ xml/*
 /apoplexy.exe
 /apoplexy.dSYM/
 
+# CMake build trees.
+/build/
+
 # vcpkg (project-local toolchain + installed deps for the macOS build).
 /.vcpkg/
 /.vcpkg-shim/

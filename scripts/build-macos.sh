@@ -4,14 +4,19 @@
 # Build apoplexy natively on macOS using a project-local vcpkg.
 # Resolves SDL2/SDL2_image/SDL2_ttf/libzip from vcpkg.json into
 # ./vcpkg_installed/, builds Princed Resources (PR) from the bundled source
-# zip into ./pr/pr-darwin (no macOS PR binary ships in the repo), then runs
-# the existing src/Makefile unchanged.
+# zip into ./pr/pr-darwin (no macOS PR binary ships in the repo), then builds
+# apoplexy with CMake.
 #
 # Honors $VCPKG_ROOT if set (opt-out for users with a shared vcpkg);
 # otherwise auto-clones vcpkg into ./.vcpkg/ on first run.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+
+if ! command -v cmake >/dev/null 2>&1; then
+	echo "cmake was not found. Install it with: brew install cmake" >&2
+	exit 1
+fi
 
 if [[ -n "${VCPKG_ROOT-}" && -x "$VCPKG_ROOT/vcpkg" ]]; then
 	vcpkg_root="$VCPKG_ROOT"
@@ -56,34 +61,16 @@ if [[ ! -x "$pr_target" || "$pr_target" -ot "$pr_zip" ]]; then
 	echo "Built $pr_target ($(file -b "$pr_target"))."
 fi
 
-# vcpkg's x64-osx triplet produces static libs (.a); SDL2_image/SDL2_ttf/libzip
-# carry transitive deps (libSDL2 itself, libpng, zlib, freetype, framework -lWl,...)
-# that the existing src/Makefile's hardcoded link line does not list. Generate a
-# sdl2-config shim that emits the full static link line via pkg-config; the
-# Makefile's literal "-lSDL2_ttf -lSDL2_image -lzip" become harmless duplicates.
-shim_dir="$repo_root/.vcpkg-shim"
-mkdir -p "$shim_dir"
-cat > "$shim_dir/sdl2-config" <<'SHIM'
-#!/usr/bin/env bash
-set -euo pipefail
-out=()
-for arg; do
-	case "$arg" in
-		--cflags)  out+=( $(pkg-config --cflags sdl2) ) ;;
-		--libs)    out+=( $(pkg-config --static --libs SDL2_image SDL2_ttf libzip sdl2) ) ;;
-		--version) out+=( $(pkg-config --modversion sdl2) ) ;;
-	esac
-done
-echo "${out[@]}"
-SHIM
-chmod +x "$shim_dir/sdl2-config"
+# vcpkg's macOS triplets produce static libs (.a). Ask CMake to consume the
+# pkg-config --static dependency set so SDL2_image/SDL2_ttf/libzip bring their
+# transitive libraries and frameworks along. libcurl intentionally comes from
+# the macOS SDK through CMake's FindCURL module.
+export PKG_CONFIG_PATH="$prefix/lib/pkgconfig:$prefix/share/pkgconfig:${PKG_CONFIG_PATH-}"
 
-# Apple Clang honors CPATH/LIBRARY_PATH like implicit -I/-L, so the existing
-# src/Makefile picks up vcpkg headers and libs without modification. The shim
-# sdl2-config above takes precedence on PATH for transitive deps.
-export PATH="$shim_dir:$PATH"
-export PKG_CONFIG_PATH="$prefix/lib/pkgconfig:${PKG_CONFIG_PATH-}"
-export CPATH="$prefix/include:$prefix/include/SDL2:${CPATH-}"
-export LIBRARY_PATH="$prefix/lib:${LIBRARY_PATH-}"
-
-exec make -C "$repo_root/src"
+build_dir="$repo_root/build/macos-$triplet"
+cmake \
+	-S "$repo_root" \
+	-B "$build_dir" \
+	-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+	-DAPOPLEXY_USE_STATIC_PKGCONFIG=ON
+exec cmake --build "$build_dir"

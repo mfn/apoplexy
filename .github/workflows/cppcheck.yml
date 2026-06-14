@@ -1,0 +1,41 @@
+name: Cppcheck
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/cppcheck.yml
+      - src/**
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/cppcheck.yml
+      - src/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends --no-upgrade \
+            cppcheck \
+            libsdl2-dev \
+            libsdl2-image-dev \
+            libsdl2-ttf-dev \
+            libcurl4-openssl-dev \
+            libzip-dev
+
+      - name: Run cppcheck
+        run: make -C src cppcheck CPPCHECK_FLAGS=-I/usr/include/SDL2

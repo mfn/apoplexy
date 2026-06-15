@@ -235,10 +235,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${{ github.ref_name }}"
+          release_flags=()
+
+          case "$tag" in
+            *-rc*) release_flags+=(--prerelease) ;;
+          esac
+
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" release-assets/* --clobber
+            if (( ${#release_flags[@]} > 0 )); then
+              gh release edit "$tag" "${release_flags[@]}"
+            fi
           else
             gh release create "$tag" release-assets/* \
               --title "$tag" \
-              --generate-notes
+              --generate-notes \
+              "${release_flags[@]}"
           fi

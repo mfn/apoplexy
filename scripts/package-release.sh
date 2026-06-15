@@ -166,9 +166,12 @@ banned=(
 	"$stage"/prince2/*.exe
 	"$stage"/snes/*.smc
 	"$stage"/snes/*.sfc
-	"$stage"/DOSBox
-	"$stage"/ZSNES
 )
+for item in "$stage/DOSBox" "$stage/ZSNES"; do
+	if [[ -e "$item" ]]; then
+		banned+=("$item")
+	fi
+done
 if (( ${#banned[@]} > 0 )); then
 	printf 'package contains forbidden bundled game/runtime files:\n' >&2
 	printf '  %s\n' "${banned[@]}" >&2

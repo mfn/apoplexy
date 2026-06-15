@@ -79,8 +79,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: x86_64
-            runner: macos-13
           - arch: arm64
             runner: macos-15
 

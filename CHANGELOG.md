@@ -26,6 +26,7 @@ The format is based on Keep a Changelog. Historical release labels such as
 - Documented macOS build prerequisites and the project-local dependency layout.
 
 ### Fixed
+- Restored the application icon embedded in Windows executables.
 - Fixed a startup crash on macOS when optional directories are missing by
   avoiding `closedir(NULL)` in `CheckRequiredFiles()` and `UsesNative()`.
 

@@ -129,19 +129,30 @@ jobs:
     timeout-minutes: 45
     defaults:
       run:
-        shell: bash
+        shell: msys2 {0}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
-      - name: Cache vcpkg
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
         with:
-          path: |
-            .vcpkg
-            vcpkg_installed
-          key: vcpkg-x64-windows-${{ hashFiles('vcpkg.json') }}
+          msystem: UCRT64
+          update: true
+          install: >-
+            file
+            git
+            zip
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-SDL2_image
+            mingw-w64-ucrt-x86_64-SDL2_ttf
+            mingw-w64-ucrt-x86_64-curl
+            mingw-w64-ucrt-x86_64-libzip
 
       - name: Derive package tag
         id: package
@@ -150,7 +161,9 @@ jobs:
           echo "tag=$safe_ref" >> "$GITHUB_OUTPUT"
 
       - name: Build apoplexy
-        run: bash scripts/build-windows.sh
+        run: |
+          bash scripts/build-windows-msys2.sh
+          ./apoplexy.exe --version
 
       - name: Package release artifact
         run: ./scripts/package-release.sh --tag "${{ steps.package.outputs.tag }}" --platform windows --arch x86_64

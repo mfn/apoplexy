@@ -9,7 +9,7 @@ on:
       - src/**
   push:
     branches:
-      - master
+      - main
     paths:
       - CMakeLists.txt
       - .github/workflows/windows-build.yml

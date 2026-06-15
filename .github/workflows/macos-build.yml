@@ -11,7 +11,7 @@ on:
       - vcpkg.json
   push:
     branches:
-      - master
+      - main
     paths:
       - CMakeLists.txt
       - .github/workflows/macos-build.yml

@@ -135,12 +135,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Derive package tag
-        id: package
-        run: |
-          safe_ref="${GITHUB_REF_NAME//\//-}"
-          echo "tag=$safe_ref" >> "$GITHUB_OUTPUT"
-
       - name: Set up MSYS2
         uses: msys2/setup-msys2@v2
         with:
@@ -159,6 +153,12 @@ jobs:
             mingw-w64-ucrt-x86_64-SDL2_ttf
             mingw-w64-ucrt-x86_64-curl
             mingw-w64-ucrt-x86_64-libzip
+
+      - name: Derive package tag
+        id: package
+        run: |
+          safe_ref="${GITHUB_REF_NAME//\//-}"
+          echo "tag=$safe_ref" >> "$GITHUB_OUTPUT"
 
       - name: Build apoplexy
         run: |

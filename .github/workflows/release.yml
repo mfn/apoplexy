@@ -31,6 +31,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Derive package tag
+        id: package
+        run: |
+          safe_ref="${GITHUB_REF_NAME//\//-}"
+          echo "tag=$safe_ref" >> "$GITHUB_OUTPUT"
+
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -62,13 +68,13 @@ jobs:
       - name: Package release artifact
         env:
           APOPLEXY_PR_HELPER: ${{ steps.pr.outputs.path }}
-        run: ./scripts/package-release.sh --tag "${{ github.ref_name }}" --platform linux --arch "${{ matrix.arch }}"
+        run: ./scripts/package-release.sh --tag "${{ steps.package.outputs.tag }}" --platform linux --arch "${{ matrix.arch }}"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: apoplexy-${{ github.ref_name }}-linux-${{ matrix.arch }}
-          path: dist/apoplexy-${{ github.ref_name }}-linux-${{ matrix.arch }}.tar.gz
+          name: apoplexy-${{ steps.package.outputs.tag }}-linux-${{ matrix.arch }}
+          path: dist/apoplexy-${{ steps.package.outputs.tag }}-linux-${{ matrix.arch }}.tar.gz
           if-no-files-found: error
 
   macos:
@@ -79,14 +85,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: x86_64
-            runner: macos-13
           - arch: arm64
             runner: macos-15
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+
+      - name: Derive package tag
+        id: package
+        run: |
+          safe_ref="${GITHUB_REF_NAME//\//-}"
+          echo "tag=$safe_ref" >> "$GITHUB_OUTPUT"
 
       - name: Install build tools
         run: |
@@ -104,13 +114,13 @@ jobs:
           file ./pr/pr-darwin
 
       - name: Package release artifact
-        run: ./scripts/package-release.sh --tag "${{ github.ref_name }}" --platform macos --arch "${{ matrix.arch }}"
+        run: ./scripts/package-release.sh --tag "${{ steps.package.outputs.tag }}" --platform macos --arch "${{ matrix.arch }}"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: apoplexy-${{ github.ref_name }}-macos-${{ matrix.arch }}
-          path: dist/apoplexy-${{ github.ref_name }}-macos-${{ matrix.arch }}.tar.gz
+          name: apoplexy-${{ steps.package.outputs.tag }}-macos-${{ matrix.arch }}
+          path: dist/apoplexy-${{ steps.package.outputs.tag }}-macos-${{ matrix.arch }}.tar.gz
           if-no-files-found: error
 
   windows:
@@ -132,6 +142,7 @@ jobs:
           update: true
           install: >-
             file
+            git
             zip
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-cmake
@@ -143,19 +154,25 @@ jobs:
             mingw-w64-ucrt-x86_64-curl
             mingw-w64-ucrt-x86_64-libzip
 
+      - name: Derive package tag
+        id: package
+        run: |
+          safe_ref="${GITHUB_REF_NAME//\//-}"
+          echo "tag=$safe_ref" >> "$GITHUB_OUTPUT"
+
       - name: Build apoplexy
         run: |
           bash scripts/build-windows-msys2.sh
           ./apoplexy.exe --version
 
       - name: Package release artifact
-        run: ./scripts/package-release.sh --tag "${{ github.ref_name }}" --platform windows --arch x86_64
+        run: ./scripts/package-release.sh --tag "${{ steps.package.outputs.tag }}" --platform windows --arch x86_64
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: apoplexy-${{ github.ref_name }}-windows-x86_64
-          path: dist/apoplexy-${{ github.ref_name }}-windows-x86_64.zip
+          name: apoplexy-${{ steps.package.outputs.tag }}-windows-x86_64
+          path: dist/apoplexy-${{ steps.package.outputs.tag }}-windows-x86_64.zip
           if-no-files-found: error
 
   source:
@@ -167,20 +184,26 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Derive package tag
+        id: package
+        run: |
+          safe_ref="${GITHUB_REF_NAME//\//-}"
+          echo "tag=$safe_ref" >> "$GITHUB_OUTPUT"
+
       - name: Create pure source archive
         run: |
           mkdir -p dist
           git archive \
             --format=tar.gz \
-            --prefix="apoplexy-${{ github.ref_name }}/" \
-            -o "dist/apoplexy-${{ github.ref_name }}-src.tar.gz" \
+            --prefix="apoplexy-${{ steps.package.outputs.tag }}/" \
+            -o "dist/apoplexy-${{ steps.package.outputs.tag }}-src.tar.gz" \
             HEAD
 
       - name: Upload source artifact
         uses: actions/upload-artifact@v4
         with:
-          name: apoplexy-${{ github.ref_name }}-src
-          path: dist/apoplexy-${{ github.ref_name }}-src.tar.gz
+          name: apoplexy-${{ steps.package.outputs.tag }}-src
+          path: dist/apoplexy-${{ steps.package.outputs.tag }}-src.tar.gz
           if-no-files-found: error
 
   publish:

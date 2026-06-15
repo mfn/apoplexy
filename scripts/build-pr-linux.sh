@@ -21,7 +21,7 @@ fi
 rm -rf "$build_dir"
 mkdir -p "$build_dir"
 unzip -q "$pr_zip" -d "$build_dir"
-make -C "$build_dir/PR-1.3.1-prerelease/src" all >/dev/null
+make -C "$build_dir/PR-1.3.1-prerelease/src" RELEASE="-O3 -fcommon" all >/dev/null
 cp "$build_dir/PR-1.3.1-prerelease/src/bin/pr" "$output"
 chmod +x "$output"
 

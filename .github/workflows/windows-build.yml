@@ -5,7 +5,9 @@ on:
     paths:
       - CMakeLists.txt
       - .github/workflows/windows-build.yml
-      - scripts/build-windows-msys2.sh
+      - scripts/build-windows.sh
+      - scripts/package-release.sh
+      - vcpkg.json
       - src/**
   push:
     branches:
@@ -13,7 +15,9 @@ on:
     paths:
       - CMakeLists.txt
       - .github/workflows/windows-build.yml
-      - scripts/build-windows-msys2.sh
+      - scripts/build-windows.sh
+      - scripts/package-release.sh
+      - vcpkg.json
       - src/**
   workflow_dispatch:
 
@@ -31,31 +35,25 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        shell: msys2 {0}
+        shell: bash
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Set up MSYS2
-        uses: msys2/setup-msys2@v2
+      - name: Cache vcpkg
+        uses: actions/cache@v4
         with:
-          msystem: UCRT64
-          update: true
-          install: >-
-            file
-            mingw-w64-ucrt-x86_64-gcc
-            mingw-w64-ucrt-x86_64-cmake
-            mingw-w64-ucrt-x86_64-ninja
-            mingw-w64-ucrt-x86_64-pkgconf
-            mingw-w64-ucrt-x86_64-SDL2
-            mingw-w64-ucrt-x86_64-SDL2_image
-            mingw-w64-ucrt-x86_64-SDL2_ttf
-            mingw-w64-ucrt-x86_64-curl
-            mingw-w64-ucrt-x86_64-libzip
+          path: |
+            .vcpkg
+            vcpkg_installed
+          key: vcpkg-x64-windows-${{ hashFiles('vcpkg.json') }}
 
       - name: Build apoplexy
-        run: bash scripts/build-windows-msys2.sh
+        run: bash scripts/build-windows.sh
+
+      - name: Package release artifact
+        run: ./scripts/package-release.sh --tag test --platform windows --arch x86_64
 
       - name: Check binary version
-        run: ./apoplexy.exe --version
+        run: ./dist/apoplexy-test-windows-x86_64/apoplexy.exe --version

@@ -109,19 +109,12 @@ if [[ "$platform" != "windows" ]]; then
 fi
 
 if [[ "$platform" == "windows" ]]; then
-	if ! command -v ldd >/dev/null 2>&1; then
-		printf '%s\n' "ldd was not found; cannot collect Windows runtime DLLs." >&2
+	vcpkg_bin="$repo_root/vcpkg_installed/x64-windows/bin"
+	if [[ ! -d "$vcpkg_bin" ]]; then
+		printf 'vcpkg_installed/x64-windows/bin not found; run scripts/build-windows.sh first.\n' >&2
 		exit 1
 	fi
-	while IFS= read -r line; do
-		for word in $line; do
-			case "$word" in
-				/ucrt64/bin/*.dll|/mingw64/bin/*.dll)
-					cp "$word" "$stage/$(basename "$word")"
-					;;
-			esac
-		done
-	done < <(ldd "$exe_src")
+	cp "$vcpkg_bin"/*.dll "$stage/"
 fi
 
 mkdir -p \
@@ -188,13 +181,16 @@ case "$platform" in
 		)
 		;;
 	windows)
-		if ! command -v zip >/dev/null 2>&1; then
-			printf '%s\n' "zip was not found." >&2
-			exit 1
-		fi
 		(
 			cd "$dist_dir"
-			zip -qr "$archive" "$package"
+			if command -v zip >/dev/null 2>&1; then
+				zip -qr "$archive" "$package"
+			elif command -v 7z >/dev/null 2>&1; then
+				7z a -tzip -r "$archive" "$package" > /dev/null
+			else
+				printf '%s\n' "Neither zip nor 7z was found." >&2
+				exit 1
+			fi
 		)
 		;;
 esac

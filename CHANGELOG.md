@@ -19,10 +19,6 @@ The format is based on Keep a Changelog. Historical release labels such as
   intentional background-rendering branch.
 
 ### Changed
-- Switched the Windows build from MSYS2/MinGW to vcpkg (MSVC), eliminating
-  the AV1 and JPEG XL codec DLLs that SDL2_image pulled in via MSYS2. curl
-  now uses Windows-native TLS (Schannel) instead of OpenSSL. Reduces the
-  Windows release package from ~58 MB of bundled DLLs to ~12–14 MB.
 - Moved the remote update check after command-line handling so commands like
   `apoplexy --version` exit without making an HTTP request.
 - Updated macOS and MSYS2 UCRT64 build scripts to build through CMake.

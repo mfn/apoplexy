@@ -11844,9 +11844,6 @@ void InitScreen (void)
 	int iSixBitLoop;
 	int iLoopFrame;
 
-#if defined SDL_MAIN_HANDLED
-	SDL_SetMainReady();
-#endif
 	if (SDL_Init (SDL_INIT_AUDIO|SDL_INIT_VIDEO|
 		SDL_INIT_GAMECONTROLLER|SDL_INIT_HAPTIC) < 0)
 	{

@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Derive package tag
         id: package
@@ -71,7 +71,7 @@ jobs:
         run: ./scripts/package-release.sh --tag "${{ steps.package.outputs.tag }}" --platform linux --arch "${{ matrix.arch }}"
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: apoplexy-${{ steps.package.outputs.tag }}-linux-${{ matrix.arch }}
           path: dist/apoplexy-${{ steps.package.outputs.tag }}-linux-${{ matrix.arch }}.tar.gz
@@ -90,7 +90,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Derive package tag
         id: package
@@ -117,7 +117,7 @@ jobs:
         run: ./scripts/package-release.sh --tag "${{ steps.package.outputs.tag }}" --platform macos --arch "${{ matrix.arch }}"
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: apoplexy-${{ steps.package.outputs.tag }}-macos-${{ matrix.arch }}
           path: dist/apoplexy-${{ steps.package.outputs.tag }}-macos-${{ matrix.arch }}.tar.gz
@@ -133,10 +133,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Cache vcpkg
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             .vcpkg
@@ -156,7 +156,7 @@ jobs:
         run: ./scripts/package-release.sh --tag "${{ steps.package.outputs.tag }}" --platform windows --arch x86_64
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: apoplexy-${{ steps.package.outputs.tag }}-windows-x86_64
           path: dist/apoplexy-${{ steps.package.outputs.tag }}-windows-x86_64.zip
@@ -169,7 +169,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Derive package tag
         id: package
@@ -187,7 +187,7 @@ jobs:
             HEAD
 
       - name: Upload source artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: apoplexy-${{ steps.package.outputs.tag }}-src
           path: dist/apoplexy-${{ steps.package.outputs.tag }}-src.tar.gz
@@ -206,7 +206,7 @@ jobs:
 
     steps:
       - name: Download package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: release-assets
           merge-multiple: true

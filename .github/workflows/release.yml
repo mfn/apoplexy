@@ -37,20 +37,18 @@ jobs:
           safe_ref="${GITHUB_REF_NAME//\//-}"
           echo "tag=$safe_ref" >> "$GITHUB_OUTPUT"
 
+      - name: Cache apt packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: /var/cache/apt/archives
+          key: apt-ubuntu-24.04-${{ hashFiles('scripts/apt-deps.txt') }}
+          restore-keys: apt-ubuntu-24.04-
+
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends --no-upgrade \
-            gcc \
-            cmake \
-            make \
-            pkg-config \
-            unzip \
-            libsdl2-dev \
-            libsdl2-image-dev \
-            libsdl2-ttf-dev \
-            libcurl4-openssl-dev \
-            libzip-dev
+            $(cat scripts/apt-deps.txt)
 
       - name: Build apoplexy
         run: |
@@ -107,6 +105,28 @@ jobs:
             brew install pkg-config
           fi
 
+      - name: Cache vcpkg tool
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: .vcpkg
+          key: vcpkg-tool-macos-${{ runner.arch }}-f3e10653cc27d62a37a3763cd84b38bca07c6075
+          restore-keys: vcpkg-tool-macos-${{ runner.arch }}-
+
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: vcpkg_installed
+          key: vcpkg-installed-macos-${{ runner.arch }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-installed-macos-${{ runner.arch }}-
+
+      - name: Cache PR build
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            pr/pr-darwin
+            .pr-build
+          key: pr-darwin-${{ runner.arch }}-${{ hashFiles('pr/PR-1.3.1-prerelease.ZIP') }}
+
       - name: Build apoplexy
         run: |
           ./scripts/build-macos.sh
@@ -135,24 +155,25 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
+      - name: Read MSYS2 package list
+        id: msys2-deps
+        shell: bash
+        run: |
+          packages=$(tr '\n' ' ' < scripts/msys2-deps.txt)
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+
+      - name: Cache MSYS2 packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: C:\msys64\var\cache\pacman\pkg
+          key: msys2-ucrt64-${{ hashFiles('scripts/msys2-deps.txt') }}
+          restore-keys: msys2-ucrt64-
+
       - name: Set up MSYS2
         uses: msys2/setup-msys2@e9898307ac31d1a803454791be09ab9973336e1c # v2.31.1
         with:
           msystem: UCRT64
-          update: true
-          install: >-
-            file
-            git
-            zip
-            mingw-w64-ucrt-x86_64-gcc
-            mingw-w64-ucrt-x86_64-cmake
-            mingw-w64-ucrt-x86_64-ninja
-            mingw-w64-ucrt-x86_64-pkgconf
-            mingw-w64-ucrt-x86_64-SDL2
-            mingw-w64-ucrt-x86_64-SDL2_image
-            mingw-w64-ucrt-x86_64-SDL2_ttf
-            mingw-w64-ucrt-x86_64-curl
-            mingw-w64-ucrt-x86_64-libzip
+          install: ${{ steps.msys2-deps.outputs.packages }}
 
       - name: Derive package tag
         id: package

@@ -23,7 +23,9 @@ if [[ -n "${VCPKG_ROOT-}" && -x "$VCPKG_ROOT/vcpkg" ]]; then
 else
 	vcpkg_root="$repo_root/.vcpkg"
 	if [[ ! -x "$vcpkg_root/vcpkg" ]]; then
-		git clone --depth=1 https://github.com/microsoft/vcpkg "$vcpkg_root"
+		git init "$vcpkg_root"
+		git -C "$vcpkg_root" fetch --depth=1 https://github.com/microsoft/vcpkg f3e10653cc27d62a37a3763cd84b38bca07c6075
+		git -C "$vcpkg_root" checkout FETCH_HEAD
 		"$vcpkg_root/bootstrap-vcpkg.sh" -disableMetrics
 	fi
 fi

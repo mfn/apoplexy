@@ -37,22 +37,25 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
+      - name: Read MSYS2 package list
+        id: msys2-deps
+        shell: bash
+        run: |
+          packages=$(tr '\n' ' ' < scripts/msys2-deps.txt)
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+
+      - name: Cache MSYS2 packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: C:\msys64\var\cache\pacman\pkg
+          key: msys2-ucrt64-${{ hashFiles('scripts/msys2-deps.txt') }}
+          restore-keys: msys2-ucrt64-
+
       - name: Set up MSYS2
         uses: msys2/setup-msys2@e9898307ac31d1a803454791be09ab9973336e1c # v2.31.1
         with:
           msystem: UCRT64
-          update: true
-          install: >-
-            file
-            mingw-w64-ucrt-x86_64-gcc
-            mingw-w64-ucrt-x86_64-cmake
-            mingw-w64-ucrt-x86_64-ninja
-            mingw-w64-ucrt-x86_64-pkgconf
-            mingw-w64-ucrt-x86_64-SDL2
-            mingw-w64-ucrt-x86_64-SDL2_image
-            mingw-w64-ucrt-x86_64-SDL2_ttf
-            mingw-w64-ucrt-x86_64-curl
-            mingw-w64-ucrt-x86_64-libzip
+          install: ${{ steps.msys2-deps.outputs.packages }}
 
       - name: Build apoplexy
         run: bash scripts/build-windows-msys2.sh

@@ -47,6 +47,28 @@ jobs:
             brew install pkg-config
           fi
 
+      - name: Cache vcpkg tool
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: .vcpkg
+          key: vcpkg-tool-macos-${{ runner.arch }}-f3e10653cc27d62a37a3763cd84b38bca07c6075
+          restore-keys: vcpkg-tool-macos-${{ runner.arch }}-
+
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: vcpkg_installed
+          key: vcpkg-installed-macos-${{ runner.arch }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-installed-macos-${{ runner.arch }}-
+
+      - name: Cache PR build
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            pr/pr-darwin
+            .pr-build
+          key: pr-darwin-${{ runner.arch }}-${{ hashFiles('pr/PR-1.3.1-prerelease.ZIP') }}
+
       - name: Build apoplexy
         run: ./scripts/build-macos.sh
 

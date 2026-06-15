@@ -19,6 +19,11 @@ endif()
 
 if(APOPLEXY_BUILD_APP)
 	add_executable(apoplexy src/apoplexy.c)
+	if(WIN32)
+		enable_language(RC)
+		target_include_directories(apoplexy PRIVATE "${PROJECT_SOURCE_DIR}")
+		target_sources(apoplexy PRIVATE src/apoplexy.rc)
+	endif()
 
 	set_target_properties(apoplexy PROPERTIES
 		C_STANDARD 99

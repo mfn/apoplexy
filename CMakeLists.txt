@@ -63,7 +63,9 @@ if(APOPLEXY_BUILD_APP)
 			-Wno-stringop-overflow)
 	endif()
 
-	find_package(PkgConfig REQUIRED)
+	if(NOT WIN32)
+		find_package(PkgConfig REQUIRED)
+	endif()
 endif()
 
 function(apoplexy_apply_pkg_config sTarget sPrefix)
@@ -97,28 +99,41 @@ function(apoplexy_apply_pkg_config sTarget sPrefix)
 endfunction()
 
 if(APOPLEXY_BUILD_APP)
-	pkg_check_modules(APOPLEXY_SDLZIP REQUIRED
-		SDL2_image
-		SDL2_ttf
-		libzip
-		sdl2)
-	apoplexy_apply_pkg_config(apoplexy APOPLEXY_SDLZIP)
-
-	if(APPLE)
+	if(WIN32)
+		find_package(SDL2 CONFIG REQUIRED)
+		find_package(SDL2_image CONFIG REQUIRED)
+		find_package(SDL2_ttf CONFIG REQUIRED)
+		find_package(libzip CONFIG REQUIRED)
 		find_package(CURL REQUIRED)
-		target_link_libraries(apoplexy PRIVATE CURL::libcurl)
-	endif()
-	if(NOT APPLE)
-		pkg_check_modules(APOPLEXY_CURL libcurl)
-		if(APOPLEXY_CURL_FOUND)
-			apoplexy_apply_pkg_config(apoplexy APOPLEXY_CURL)
-		else()
+		target_compile_definitions(apoplexy PRIVATE SDL_MAIN_HANDLED)
+		target_include_directories(apoplexy PRIVATE src/msvc)
+		target_link_libraries(apoplexy PRIVATE
+			$<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
+			$<IF:$<TARGET_EXISTS:SDL2_image::SDL2_image>,SDL2_image::SDL2_image,SDL2_image::SDL2_image-static>
+			$<IF:$<TARGET_EXISTS:SDL2_ttf::SDL2_ttf>,SDL2_ttf::SDL2_ttf,SDL2_ttf::SDL2_ttf-static>
+			libzip::zip
+			CURL::libcurl)
+	else()
+		pkg_check_modules(APOPLEXY_SDLZIP REQUIRED
+			SDL2_image
+			SDL2_ttf
+			libzip
+			sdl2)
+		apoplexy_apply_pkg_config(apoplexy APOPLEXY_SDLZIP)
+
+		if(APPLE)
 			find_package(CURL REQUIRED)
 			target_link_libraries(apoplexy PRIVATE CURL::libcurl)
+		else()
+			pkg_check_modules(APOPLEXY_CURL libcurl)
+			if(APOPLEXY_CURL_FOUND)
+				apoplexy_apply_pkg_config(apoplexy APOPLEXY_CURL)
+			else()
+				find_package(CURL REQUIRED)
+				target_link_libraries(apoplexy PRIVATE CURL::libcurl)
+			endif()
 		endif()
-	endif()
 
-	if(NOT MSVC AND NOT APPLE)
 		target_link_libraries(apoplexy PRIVATE m)
 	endif()
 endif()

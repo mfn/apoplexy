@@ -1,0 +1,221 @@
+name: Release artifacts
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends --no-upgrade \
+            gcc \
+            cmake \
+            make \
+            pkg-config \
+            unzip \
+            libsdl2-dev \
+            libsdl2-image-dev \
+            libsdl2-ttf-dev \
+            libcurl4-openssl-dev \
+            libzip-dev
+
+      - name: Build apoplexy
+        run: |
+          cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build/linux
+          ./apoplexy --version
+
+      - name: Build native PR helper
+        id: pr
+        run: |
+          pr_helper="$(./scripts/build-pr-linux.sh)"
+          echo "path=$pr_helper" >> "$GITHUB_OUTPUT"
+          file "$pr_helper"
+
+      - name: Package release artifact
+        env:
+          APOPLEXY_PR_HELPER: ${{ steps.pr.outputs.path }}
+        run: ./scripts/package-release.sh --tag "${{ github.ref_name }}" --platform linux --arch "${{ matrix.arch }}"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apoplexy-${{ github.ref_name }}-linux-${{ matrix.arch }}
+          path: dist/apoplexy-${{ github.ref_name }}-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: macos-13
+          - arch: arm64
+            runner: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install build tools
+        run: |
+          if ! brew list cmake >/dev/null 2>&1; then
+            brew install cmake
+          fi
+          if ! brew list pkg-config >/dev/null 2>&1; then
+            brew install pkg-config
+          fi
+
+      - name: Build apoplexy
+        run: |
+          ./scripts/build-macos.sh
+          ./apoplexy --version
+          file ./pr/pr-darwin
+
+      - name: Package release artifact
+        run: ./scripts/package-release.sh --tag "${{ github.ref_name }}" --platform macos --arch "${{ matrix.arch }}"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apoplexy-${{ github.ref_name }}-macos-${{ matrix.arch }}
+          path: dist/apoplexy-${{ github.ref_name }}-macos-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  windows:
+    name: Windows x86_64
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            file
+            zip
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-SDL2_image
+            mingw-w64-ucrt-x86_64-SDL2_ttf
+            mingw-w64-ucrt-x86_64-curl
+            mingw-w64-ucrt-x86_64-libzip
+
+      - name: Build apoplexy
+        run: |
+          bash scripts/build-windows-msys2.sh
+          ./apoplexy.exe --version
+
+      - name: Package release artifact
+        run: ./scripts/package-release.sh --tag "${{ github.ref_name }}" --platform windows --arch x86_64
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apoplexy-${{ github.ref_name }}-windows-x86_64
+          path: dist/apoplexy-${{ github.ref_name }}-windows-x86_64.zip
+          if-no-files-found: error
+
+  source:
+    name: Source snapshot
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Create pure source archive
+        run: |
+          mkdir -p dist
+          git archive \
+            --format=tar.gz \
+            --prefix="apoplexy-${{ github.ref_name }}/" \
+            -o "dist/apoplexy-${{ github.ref_name }}-src.tar.gz" \
+            HEAD
+
+      - name: Upload source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apoplexy-${{ github.ref_name }}-src
+          path: dist/apoplexy-${{ github.ref_name }}-src.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs:
+      - linux
+      - macos
+      - windows
+      - source
+
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create checksums
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ github.ref_name }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" release-assets/* --clobber
+          else
+            gh release create "$tag" release-assets/* \
+              --title "$tag" \
+              --generate-notes
+          fi

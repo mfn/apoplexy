@@ -66,6 +66,34 @@ if(APOPLEXY_BUILD_APP)
 	find_package(PkgConfig REQUIRED)
 endif()
 
+function(apoplexy_configure_macos_vcpkg_pkgconfig)
+	if(NOT APPLE)
+		return()
+	endif()
+
+	if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
+		set(sVcpkgTriplet "arm64-osx")
+	else()
+		set(sVcpkgTriplet "x64-osx")
+	endif()
+
+	set(sVcpkgPkgConfig
+		"${PROJECT_SOURCE_DIR}/vcpkg_installed/${sVcpkgTriplet}/lib/pkgconfig")
+
+	if(EXISTS "${sVcpkgPkgConfig}/sdl2.pc")
+		if(DEFINED ENV{PKG_CONFIG_PATH}
+			AND NOT "$ENV{PKG_CONFIG_PATH}" STREQUAL "")
+			set(ENV{PKG_CONFIG_PATH}
+				"${sVcpkgPkgConfig}:$ENV{PKG_CONFIG_PATH}")
+		else()
+			set(ENV{PKG_CONFIG_PATH} "${sVcpkgPkgConfig}")
+		endif()
+
+		set(APOPLEXY_USE_STATIC_PKGCONFIG ON CACHE BOOL
+			"Use pkg-config static dependency link flags" FORCE)
+	endif()
+endfunction()
+
 function(apoplexy_apply_pkg_config sTarget sPrefix)
 	if(APOPLEXY_USE_STATIC_PKGCONFIG)
 		set(sSuffix "_STATIC")
@@ -97,6 +125,7 @@ function(apoplexy_apply_pkg_config sTarget sPrefix)
 endfunction()
 
 if(APOPLEXY_BUILD_APP)
+	apoplexy_configure_macos_vcpkg_pkgconfig()
 	pkg_check_modules(APOPLEXY_SDLZIP REQUIRED
 		SDL2_image
 		SDL2_ttf

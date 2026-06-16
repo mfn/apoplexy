@@ -581,19 +581,31 @@ int iRoomLinks;
 int iTileW;
 int iTileH;
 
-/* Pixel-perfect hover: each sel-overlay texture maps to a CPU mask.
- * The mask is an array of iW*iH bytes (1 = opaque, 0 = clear),
- * stored alongside the SDL_Texture* key in a flat open-address table. */
-#define HOVER_MASK_SLOTS 512
+/* Pixel-perfect hover: selected texture paths are registered during preload;
+ * CPU masks are generated lazily and retained in an LRU cache. */
+#define HOVER_MASK_CAP_DEFAULT 128
 typedef struct {
-	SDL_Texture *imgKey;   /* sel-overlay texture pointer, NULL = empty */
-	unsigned char *arMask; /* [iW * iH], 1 = opaque */
+	SDL_Texture *imgKey;
+	char *sPath;
+} HoverPathEntry;
+HoverPathEntry *arHoverPath;
+int iHoverPathCount;
+int iHoverPathCap;
+
+typedef struct {
+	SDL_Texture *imgKey;       /* sel-overlay texture pointer */
+	unsigned char *arMask;     /* [iW * iH], 1 = opaque */
 	int iW;
 	int iH;
+	unsigned int iLastUsed;
 } HoverMaskEntry;
-HoverMaskEntry arHoverMask[HOVER_MASK_SLOTS];
+HoverMaskEntry *arHoverMask;
 int iHoverMaskCount;
+int iHoverMaskCap;
+int iHoverMaskBuildCount;
+int iHoverMaskEvictCount;
 int iHoverMaskFail;
+unsigned int iHoverMaskTick;
 int iHoverDebugLastX = -1;
 int iHoverDebugLastY = -1;
 int iHoverDebugLastHit = -1;
@@ -2106,7 +2118,14 @@ void CmpPrep (char *sBlock, char *sCompare, SDL_Texture **imgcmp,
 	SDL_Texture **imgshow);
 int InArea (int iUpperLeftX, int iUpperLeftY,
 	int iLowerRightX, int iLowerRightY);
-void HoverMaskStore (SDL_Texture *imgKey, SDL_Surface *surfSel);
+void HoverPathRegister (SDL_Texture *imgKey, char *sPath);
+void HoverPathRegisterImage (SDL_Texture *imgKey, char *sPath, char *sPNG);
+char *HoverPathFind (SDL_Texture *imgKey);
+HoverMaskEntry *HoverMaskGet (SDL_Texture *imgKey);
+void HoverMaskBuild (char *sPath, unsigned char **arMaskOut,
+	int *iWOut, int *iHOut);
+int HoverMaskEvictSlot (void);
+void HoverFree (void);
 void HoverSlotStore (SDL_Rect dest, int iLocation, SDL_Texture *imgSel);
 int HoverRowAtMouse (void);
 int HoverTileAtMouse (void);
@@ -11296,19 +11315,140 @@ void CmpPrep (char *sBlock, char *sCompare, SDL_Texture **imgcmp,
 	}
 }
 /*****************************************************************************/
-void HoverMaskStore (SDL_Texture *imgKey, SDL_Surface *surfSel)
+void HoverPathRegister (SDL_Texture *imgKey, char *sPath)
 /*****************************************************************************/
 {
-	/* Store a 1-byte-per-pixel alpha mask for imgKey in the hash table.
-	 * Selected alpha provides the intended cell shape; its hatching is
-	 * closed conservatively. */
+	char *sCopy;
+	int iPath;
+	int iLen;
+	int iNewCap;
+	HoverPathEntry *arNew;
 
+	if (imgKey == NULL) { return; }
+	for (iPath = 0; iPath < iHoverPathCount; iPath++)
+	{
+		if (arHoverPath[iPath].imgKey == imgKey) { return; }
+	}
+	if (iHoverPathCount >= iHoverPathCap)
+	{
+		iNewCap = iHoverPathCap * 2;
+		if (iNewCap == 0) { iNewCap = 256; }
+		arNew = (HoverPathEntry *)realloc (arHoverPath,
+			iNewCap * (int)sizeof (HoverPathEntry));
+		if (arNew == NULL)
+		{
+			printf ("[FAILED] Could not grow hover path registry!\n");
+			exit (EXIT_ERROR);
+		}
+		arHoverPath = arNew;
+		iHoverPathCap = iNewCap;
+	}
+	iLen = (int)strlen (sPath) + 1;
+	sCopy = (char *)malloc (iLen);
+	if (sCopy == NULL)
+	{
+		printf ("[FAILED] Could not store hover path!\n");
+		exit (EXIT_ERROR);
+	}
+	snprintf (sCopy, iLen, "%s", sPath);
+	arHoverPath[iHoverPathCount].imgKey = imgKey;
+	arHoverPath[iHoverPathCount].sPath = sCopy;
+	iHoverPathCount++;
+	if ((iDebug == 1) && ((iHoverPathCount <= 5) ||
+		((iHoverPathCount % 250) == 0)))
+	{
+		printf ("[DEBUG] hover path registered: %i %s\n",
+			iHoverPathCount, sPath);
+	}
+}
+/*****************************************************************************/
+void HoverPathRegisterImage (SDL_Texture *imgKey, char *sPath, char *sPNG)
+/*****************************************************************************/
+{
+	char sImage[MAX_IMG + 2];
+
+	snprintf (sImage, MAX_IMG, "%s%s", sPath, sPNG);
+	HoverPathRegister (imgKey, sImage);
+}
+/*****************************************************************************/
+char *HoverPathFind (SDL_Texture *imgKey)
+/*****************************************************************************/
+{
+	int iPath;
+
+	for (iPath = 0; iPath < iHoverPathCount; iPath++)
+	{
+		if (arHoverPath[iPath].imgKey == imgKey)
+			{ return (arHoverPath[iPath].sPath); }
+	}
+	return (NULL);
+}
+/*****************************************************************************/
+HoverMaskEntry *HoverMaskGet (SDL_Texture *imgKey)
+/*****************************************************************************/
+{
+	unsigned char *arMask;
+	char *sPath;
+	int iMask;
+	int iSlot;
+	int iW;
+	int iH;
+
+	if (imgKey == NULL) { return (NULL); }
+	if (arHoverMask == NULL)
+	{
+		iHoverMaskCap = HOVER_MASK_CAP_DEFAULT;
+		arHoverMask = (HoverMaskEntry *)calloc (iHoverMaskCap,
+			(int)sizeof (HoverMaskEntry));
+		if (arHoverMask == NULL)
+		{
+			printf ("[FAILED] Could not allocate hover mask cache!\n");
+			exit (EXIT_ERROR);
+		}
+	}
+	iHoverMaskTick++;
+	if (iHoverMaskTick == 0) { iHoverMaskTick = 1; }
+	for (iMask = 0; iMask < iHoverMaskCount; iMask++)
+	{
+		if (arHoverMask[iMask].imgKey == imgKey)
+		{
+			arHoverMask[iMask].iLastUsed = iHoverMaskTick;
+			return (&arHoverMask[iMask]);
+		}
+	}
+	sPath = HoverPathFind (imgKey);
+	if (sPath == NULL)
+	{
+		printf ("[FAILED] Missing hover mask path for selected texture!\n");
+		exit (EXIT_ERROR);
+	}
+	HoverMaskBuild (sPath, &arMask, &iW, &iH);
+	iSlot = HoverMaskEvictSlot();
+	arHoverMask[iSlot].imgKey = imgKey;
+	arHoverMask[iSlot].arMask = arMask;
+	arHoverMask[iSlot].iW = iW;
+	arHoverMask[iSlot].iH = iH;
+	arHoverMask[iSlot].iLastUsed = iHoverMaskTick;
+	iHoverMaskBuildCount++;
+	if (iDebug == 1)
+	{
+		printf ("[DEBUG] hover mask generated: slot=%i cache=%i built=%i "
+			"evicted=%i %s\n", iSlot, iHoverMaskCount,
+			iHoverMaskBuildCount, iHoverMaskEvictCount, sPath);
+	}
+	return (&arHoverMask[iSlot]);
+}
+/*****************************************************************************/
+void HoverMaskBuild (char *sPath, unsigned char **arMaskOut,
+	int *iWOut, int *iHOut)
+/*****************************************************************************/
+{
+	SDL_Surface *surfSel;
 	SDL_Surface *convSel;
 	unsigned char *arMask;
 	unsigned char *arGreen;
 	unsigned char *arOutside;
 	int *arQueue;
-	int iSlot;
 	int iX;
 	int iY;
 	int iDX2;
@@ -11323,22 +11463,20 @@ void HoverMaskStore (SDL_Texture *imgKey, SDL_Surface *surfSel)
 	int iH;
 	Uint8 iR, iG, iB, iA;
 
-	iSlot = (int)(((unsigned long)(uintptr_t)imgKey >> 3)
-		% HOVER_MASK_SLOTS);
-	while ((arHoverMask[iSlot].imgKey != NULL) &&
-		(arHoverMask[iSlot].imgKey != imgKey))
+	surfSel = IMG_Load (sPath);
+	if (surfSel == NULL)
 	{
-		iSlot = (iSlot + 1) % HOVER_MASK_SLOTS;
+		printf ("[FAILED] IMG_Load hover mask: %s (%s)\n",
+			sPath, IMG_GetError());
+		exit (EXIT_ERROR);
 	}
-	if (arHoverMask[iSlot].imgKey == imgKey) { return; }
-
 	convSel = SDL_ConvertSurfaceFormat (surfSel, SDL_PIXELFORMAT_RGBA32, 0);
+	SDL_FreeSurface (surfSel);
 	if (convSel == NULL)
 	{
-		iHoverMaskFail++;
-		return;
+		printf ("[FAILED] Could not convert hover mask surface: %s\n", sPath);
+		exit (EXIT_ERROR);
 	}
-
 	iW = convSel->w;
 	iH = convSel->h;
 	arMask = (unsigned char *)calloc (iW * iH, 1);
@@ -11348,16 +11486,24 @@ void HoverMaskStore (SDL_Texture *imgKey, SDL_Surface *surfSel)
 	if ((arMask == NULL) || (arGreen == NULL) ||
 		(arOutside == NULL) || (arQueue == NULL))
 	{
-		iHoverMaskFail++;
+		printf ("[FAILED] Could not allocate hover mask buffers!\n");
 		free (arMask);
 		free (arGreen);
 		free (arOutside);
 		free (arQueue);
 		SDL_FreeSurface (convSel);
-		return;
+		exit (EXIT_ERROR);
 	}
-
-	SDL_LockSurface (convSel);
+	if (SDL_LockSurface (convSel) != 0)
+	{
+		printf ("[FAILED] Could not lock hover mask surface: %s\n", sPath);
+		free (arMask);
+		free (arGreen);
+		free (arOutside);
+		free (arQueue);
+		SDL_FreeSurface (convSel);
+		exit (EXIT_ERROR);
+	}
 
 	/*** Select only the actual green overlay pixels. ***/
 	for (iY = 0; iY < iH; iY++)
@@ -11453,22 +11599,67 @@ void HoverMaskStore (SDL_Texture *imgKey, SDL_Surface *surfSel)
 			}
 		}
 	}
-	arHoverMask[iSlot].imgKey = imgKey;
-	arHoverMask[iSlot].arMask = arMask;
-	arHoverMask[iSlot].iW = iW;
-	arHoverMask[iSlot].iH = iH;
-	iHoverMaskCount++;
-	if ((iDebug == 1) && ((iHoverMaskCount % 50) == 0))
-	{
-		printf ("[DEBUG] hover masks loaded: %i (failed: %i)\n",
-			iHoverMaskCount, iHoverMaskFail);
-	}
-
 	SDL_UnlockSurface (convSel);
 	SDL_FreeSurface (convSel);
 	free (arGreen);
 	free (arOutside);
 	free (arQueue);
+	*arMaskOut = arMask;
+	*iWOut = iW;
+	*iHOut = iH;
+}
+/*****************************************************************************/
+int HoverMaskEvictSlot (void)
+/*****************************************************************************/
+{
+	unsigned int iOldest;
+	int iMask;
+	int iOldestSlot;
+
+	if (iHoverMaskCount < iHoverMaskCap)
+	{
+		iHoverMaskCount++;
+		return (iHoverMaskCount - 1);
+	}
+	iOldestSlot = 0;
+	iOldest = arHoverMask[0].iLastUsed;
+	for (iMask = 1; iMask < iHoverMaskCount; iMask++)
+	{
+		if (arHoverMask[iMask].iLastUsed < iOldest)
+		{
+			iOldest = arHoverMask[iMask].iLastUsed;
+			iOldestSlot = iMask;
+		}
+	}
+	if (iDebug == 1)
+	{
+		printf ("[DEBUG] hover mask evict: slot=%i cache=%i built=%i\n",
+			iOldestSlot, iHoverMaskCount, iHoverMaskBuildCount);
+	}
+	free (arHoverMask[iOldestSlot].arMask);
+	arHoverMask[iOldestSlot].arMask = NULL;
+	iHoverMaskEvictCount++;
+	return (iOldestSlot);
+}
+/*****************************************************************************/
+void HoverFree (void)
+/*****************************************************************************/
+{
+	int iPath;
+	int iMask;
+
+	for (iMask = 0; iMask < iHoverMaskCount; iMask++)
+		{ free (arHoverMask[iMask].arMask); }
+	free (arHoverMask);
+	arHoverMask = NULL;
+	iHoverMaskCount = 0;
+	iHoverMaskCap = 0;
+	for (iPath = 0; iPath < iHoverPathCount; iPath++)
+		{ free (arHoverPath[iPath].sPath); }
+	free (arHoverPath);
+	arHoverPath = NULL;
+	iHoverPathCount = 0;
+	iHoverPathCap = 0;
 }
 /*****************************************************************************/
 int HoverRowAtMouse (void)
@@ -11499,13 +11690,13 @@ int HoverTileAtMouse (void)
 	int iI;
 	int iLoc;
 	int iRow;
-	int iSlot;
 	int iMX;
 	int iMY;
 	int iW;
 	int iH;
 	SDL_Texture *imgSel;
 	unsigned char *arMask;
+	HoverMaskEntry *maskEntry;
 	SDL_Rect dest;
 
 	iRow = HoverRowAtMouse();
@@ -11525,18 +11716,11 @@ int HoverTileAtMouse (void)
 
 		imgSel = arHoverSlot[iLoc].imgSel;
 		if (imgSel == NULL) { continue; }
-
-		iSlot = (int)(((unsigned long)(uintptr_t)imgSel >> 3)
-			% HOVER_MASK_SLOTS);
-		while ((arHoverMask[iSlot].imgKey != NULL) &&
-			(arHoverMask[iSlot].imgKey != imgSel))
-		{
-			iSlot = (iSlot + 1) % HOVER_MASK_SLOTS;
-		}
-		if (arHoverMask[iSlot].imgKey == NULL) { continue; }
-		arMask = arHoverMask[iSlot].arMask;
-		iW = arHoverMask[iSlot].iW;
-		iH = arHoverMask[iSlot].iH;
+		maskEntry = HoverMaskGet (imgSel);
+		if (maskEntry == NULL) { continue; }
+		arMask = maskEntry->arMask;
+		iW = maskEntry->iW;
+		iH = maskEntry->iH;
 
 		dest = arHoverSlot[iLoc].dest;
 		/* Convert raw screen pixel to unscaled tile-image coords. */
@@ -12567,6 +12751,7 @@ void InitScreen (void)
 		PreLoad (PNG_PALACE, "p_sel_22_0_sprite.png", &spriteswordpsel);
 		PreLoad (PNG_PALACE, "p_26_0_with_lattice.png", &imgp26_0_wl[1]);
 		PreLoad (PNG_PALACE, "p_sel_26_0.png", &imgp26_0_wl[2]);
+		HoverPathRegisterImage (imgp26_0_wl[2], PNG_PALACE, "p_sel_26_0.png");
 
 		/*** native ***/
 		PreLoadSet (PNG_PALACE, 'p', "0_4", imgp0_4);
@@ -13037,14 +13222,19 @@ void InitScreen (void)
 		case 1:
 			PreLoad (PNG_VARIOUS, "unknown.png", &imgunk[1]);
 			PreLoad (PNG_VARIOUS, "sel_unknown.png", &imgunk[2]);
+			HoverPathRegisterImage (imgunk[2], PNG_VARIOUS, "sel_unknown.png");
 			break;
 		case 2:
 			PreLoad (PNG_VARIOUS, "unknown_pop2.png", &imgunk[1]);
 			PreLoad (PNG_VARIOUS, "sel_unknown_pop2.png", &imgunk[2]);
+			HoverPathRegisterImage (imgunk[2], PNG_VARIOUS,
+				"sel_unknown_pop2.png");
 			break;
 		case 3:
 			PreLoad (PNG_VARIOUS, "unknown_snes.png", &imgunk[1]);
 			PreLoad (PNG_VARIOUS, "sel_unknown_snes.png", &imgunk[2]);
+			HoverPathRegisterImage (imgunk[2], PNG_VARIOUS,
+				"sel_unknown_snes.png");
 			break;
 	}
 	PreLoad (PNG_BUTTONS, "up_0.png", &imgup_0);
@@ -15250,8 +15440,10 @@ void InitScreen (void)
 							(abs (iYPos - iHoverDebugLastY) >= 8)))
 						{
 							printf ("[DEBUG] hover mouse=(%i,%i) hit=%i selected=%i "
-								"masks=%i failed=%i\n", iXPos, iYPos, iHoverNew,
-								iSelected, iHoverMaskCount, iHoverMaskFail);
+								"paths=%i cache=%i built=%i evicted=%i failed=%i\n",
+								iXPos, iYPos, iHoverNew, iSelected, iHoverPathCount,
+								iHoverMaskCount, iHoverMaskBuildCount,
+								iHoverMaskEvictCount, iHoverMaskFail);
 							iHoverDebugLastX = iXPos;
 							iHoverDebugLastY = iYPos;
 							iHoverDebugLastHit = iHoverNew;
@@ -16528,6 +16720,7 @@ void Quit (void)
 		TTF_CloseFont (font3);
 		TTF_CloseFont (font4);
 		TTF_CloseFont (font5);
+		HoverFree();
 		TTF_Quit();
 		SDL_Quit();
 		exit (EXIT_NORMAL);
@@ -32514,7 +32707,6 @@ void PreLoadSet (char *sPath, char cType, char *sTile, SDL_Texture **img)
 {
 	char sImage[MAX_IMG + 2];
 	int iBarHeight;
-	SDL_Surface *surfSel;
 
 	/*** regular ***/
 	snprintf (sImage, MAX_IMG, "%s%c_%s.png", sPath, cType, sTile);
@@ -32527,7 +32719,6 @@ void PreLoadSet (char *sPath, char cType, char *sTile, SDL_Texture **img)
 
 	/*** selected ***/
 	snprintf (sImage, MAX_IMG, "%s%c_sel_%s.png", sPath, cType, sTile);
-	surfSel = IMG_Load (sImage);
 	img[2] = IMG_LoadTexture (ascreen, sImage);
 	if (!img[2])
 	{
@@ -32535,20 +32726,8 @@ void PreLoadSet (char *sPath, char cType, char *sTile, SDL_Texture **img)
 		exit (EXIT_ERROR);
 	}
 
-	/*** hover mask: derive the selectable shape from the selected overlay. ***/
-	if (surfSel != NULL)
-	{
-		HoverMaskStore (img[2], surfSel);
-	} else {
-		iHoverMaskFail++;
-		if (iDebug == 1)
-		{
-			printf ("[DEBUG] hover mask skipped for %s%c_%s%s (%s)\n",
-				sPath, cType, sTile, ".png",
-				"selected missing");
-		}
-	}
-	if (surfSel != NULL) { SDL_FreeSurface (surfSel); }
+	/*** Hover masks are generated lazily from the selected image path. ***/
+	HoverPathRegister (img[2], sImage);
 
 	iPreLoaded+=2;
 	iBarHeight = (int)(((float)iPreLoaded/(float)iNrToPreLoad) * BAR_FULL);

@@ -456,8 +456,17 @@ More v2.0 screenshots are on [popot.org](https://www.popot.org/news.php?id=apopl
 
 | Game | Link |
 | --- | --- |
-| PoP1 DOS special events | https://www.popot.org/documentation/documents/2015-08-07_PoP1_Special_Events.pdf |
-| PoP2 DOS special events | https://www.popot.org/documentation/documents/2014-07-10_PoP2_Special_Events.pdf |
+| PoP1 DOS special events | [docs/pop1_events/pop1_events.md](docs/pop1_events/pop1_events.md) |
+| PoP2 DOS special events | [docs/pop2_events/pop2_events.md](docs/pop2_events/pop2_events.md) |
+
+> [!NOTE]
+> The special events documents above are Markdown conversions of the original
+> PDFs published by the Prince of Persia modding community at
+> [popot.org](https://www.popot.org/documentation/documents/) (PoP1:
+> [2015-08-07_PoP1_Special_Events.pdf](https://www.popot.org/documentation/documents/2015-08-07_PoP1_Special_Events.pdf),
+> PoP2:
+> [2014-07-10_PoP2_Special_Events.pdf](https://www.popot.org/documentation/documents/2014-07-10_PoP2_Special_Events.pdf)).
+> Both are licensed under the GNU Free Documentation License 1.3.
 
 ### Community Videos
 

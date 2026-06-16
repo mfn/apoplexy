@@ -18,6 +18,11 @@ if ! command -v cmake >/dev/null 2>&1; then
 	exit 1
 fi
 
+if ! command -v pkg-config >/dev/null 2>&1; then
+	echo "pkg-config was not found. Install it with: brew install pkg-config" >&2
+	exit 1
+fi
+
 if [[ -n "${VCPKG_ROOT-}" && -x "$VCPKG_ROOT/vcpkg" ]]; then
 	vcpkg_root="$VCPKG_ROOT"
 else

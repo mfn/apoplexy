@@ -588,6 +588,12 @@ The script performs these steps:
 
 The first run may take several minutes because SDL2 and related dependencies are compiled from source. Subsequent runs reuse vcpkg's binary cache and should be much faster.
 
+CLion on macOS:
+
+Run `./scripts/build-macos.sh` once before opening or reloading the project in
+CLion. This populates `vcpkg_installed/` and builds `pr/pr-darwin`. After that,
+reload CMake and build the `apoplexy` CMake target.
+
 Expected linkage:
 
 ```bash

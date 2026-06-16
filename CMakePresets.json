@@ -1,0 +1,35 @@
+{
+	"version": 3,
+	"configurePresets": [
+		{
+			"name": "macos-debug",
+			"displayName": "macOS Debug",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/cmake-build-debug",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug",
+				"APOPLEXY_USE_STATIC_PKGCONFIG": "ON"
+			},
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Darwin"
+			}
+		},
+		{
+			"name": "macos-release",
+			"displayName": "macOS Release",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build/macos-preset",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "RelWithDebInfo",
+				"APOPLEXY_USE_STATIC_PKGCONFIG": "ON"
+			},
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Darwin"
+			}
+		}
+	]
+}

@@ -5,16 +5,20 @@ on:
     paths:
       - CMakeLists.txt
       - .github/workflows/windows-build.yml
+      - cmake/**
       - scripts/build-windows-msys2.sh
       - src/**
+      - third_party/PR/**
   push:
     branches:
       - main
     paths:
       - CMakeLists.txt
       - .github/workflows/windows-build.yml
+      - cmake/**
       - scripts/build-windows-msys2.sh
       - src/**
+      - third_party/PR/**
   workflow_dispatch:
 
 permissions:
@@ -61,4 +65,8 @@ jobs:
         run: bash scripts/build-windows-msys2.sh
 
       - name: Check binary version
-        run: ./apoplexy.exe --version
+        run: |
+          ./apoplexy.exe --version
+          pr_version="$(./pr/pr.exe --version || true)"
+          printf '%s\n' "$pr_version"
+          grep -F "Princed resources (PR) v1.3.1" <<< "$pr_version"

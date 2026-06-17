@@ -30,15 +30,10 @@ The script:
   $VCPKG_ROOT if set.
 - Resolves SDL2, SDL2_image, SDL2_ttf, libzip from vcpkg.json and installs
   them into ./vcpkg_installed/<triplet>/ (gitignored).
-- Generates a sdl2-config shim (./.vcpkg-shim/, gitignored) so the existing
-  src/Makefile picks up the full transitive static link line via pkg-config
-  without any Makefile changes.
-- Builds Princed Resources (PR) from pr/PR-1.3.1-prerelease.ZIP into
-  ./pr/pr-darwin (gitignored). The repo ships pre-built pr/pr (Linux ELF
-  32-bit) and pr/pr.exe (Windows PE32) but no native macOS binary; without
-  one, apoplexy cannot import/export PoP1/PoP2 DOS .DAT files at runtime.
-  src/apoplexy.c's PR_EXECUTABLE define points at pr/pr-darwin on Darwin.
-- Runs `make -C src`. Binary lands at the repo root as ./apoplexy.
+- Builds Princed Resources (PR) from third_party/PR into ./pr/pr-darwin
+  (gitignored), and copies runtime XML into ./pr/. src/apoplexy.c's
+  PR_EXECUTABLE define points at pr/pr-darwin on Darwin.
+- Runs CMake. Binary lands at the repo root as ./apoplexy.
 
 The first run compiles SDL2 et al from source (typically several minutes).
 Subsequent runs reuse vcpkg's binary cache and are fast.
@@ -53,9 +48,9 @@ Note on PR's endianness: PR's Makefile auto-detects Darwin and sets
 for 2003-era big-endian PowerPC Macs. On Intel/Apple Silicon Macs (both
 little-endian) those shims corrupt every 32-bit field PR writes; .plv
 files come out big-endian and apoplexy rejects them with "Level has an
-incorrect size". scripts/build-macos.sh works around this by passing
-LINUX=-DNOLINUX to PR's make, which drops -DMACOS while keeping the
-non-Linux getopt port. No PR source patch needed.
+incorrect size". The CMake PR target works around this by defining NOLINUX
+without defining MACOS, which keeps the non-Linux getopt port and drops the
+old byte-swapping path. No PR source patch needed.
 
 Apple Silicon (arm64): the script auto-detects `uname -m` and selects the
 arm64-osx triplet; the same recipe should work but has not been verified

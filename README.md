@@ -519,7 +519,7 @@ More v2.0 screenshots are on [popot.org](https://www.popot.org/news.php?id=apopl
 
 ## Building
 
-When building from source, run commands from the top-level source directory unless a step says otherwise. CMake writes the binary to the top-level source directory as `./apoplexy` or `./apoplexy.exe`, not into `src/`.
+When building from source, run commands from the top-level source directory unless a step says otherwise. CMake writes the apoplexy binary to the top-level source directory as `./apoplexy` or `./apoplexy.exe`, and builds the Princed Resources helper and XML runtime files into `./pr/`.
 
 ### GNU/Linux
 
@@ -548,7 +548,7 @@ Run cppcheck through the same build tree:
 cmake --build build/linux --target cppcheck
 ```
 
-The output binary is `./apoplexy` in the top-level source directory.
+The output binaries are `./apoplexy` and `./pr/pr` in the top-level source directory.
 
 ### macOS
 
@@ -583,7 +583,7 @@ The script performs these steps:
 | vcpkg checkout | Auto-clones vcpkg into `./.vcpkg/` on first run, or uses `$VCPKG_ROOT` when set. |
 | Dependencies | Resolves `sdl2`, `sdl2-image`, `sdl2-ttf`, and `libzip` from `vcpkg.json`. libcurl intentionally comes from the macOS SDK. |
 | Install tree | Installs libraries into `./vcpkg_installed/<triplet>/`, where the triplet is `x64-osx` or `arm64-osx`. |
-| Princed Resources | Builds PR from `pr/PR-1.3.1-prerelease.ZIP` into `./pr/pr-darwin`. |
+| Princed Resources | Builds PR from `third_party/PR` into `./pr/pr-darwin` and copies runtime XML into `./pr/`. |
 | apoplexy | Runs CMake in `./build/macos-<triplet>/`; the final binary is `./apoplexy`. |
 
 The first run may take several minutes because SDL2 and related dependencies are compiled from source. Subsequent runs reuse vcpkg's binary cache and should be much faster.
@@ -591,7 +591,7 @@ The first run may take several minutes because SDL2 and related dependencies are
 CLion on macOS:
 
 Run `./scripts/build-macos.sh` once before opening or reloading the project in
-CLion. This populates `vcpkg_installed/` and builds `pr/pr-darwin`. After that,
+CLion. This populates `vcpkg_installed/` and builds `pr/pr-darwin` from `third_party/PR`. After that,
 reload CMake and build the `apoplexy` CMake target.
 
 Expected linkage:
@@ -606,7 +606,7 @@ macOS PR endianness detail:
 
 | Issue | Workaround |
 | --- | --- |
-| PR's Makefile auto-detects Darwin and sets `-DMACOS`, which selects old byte-swapping `fread`/`fwrite` shims for 2003-era big-endian PowerPC Macs. On modern little-endian Intel and Apple Silicon Macs, those shims corrupt 32-bit fields and produce `.plv` files that apoplexy rejects with `Level has an incorrect size`. | `scripts/build-macos.sh` passes `LINUX=-DNOLINUX` to PR's make. This drops `-DMACOS` while keeping the non-Linux getopt port, with no PR source patch required. |
+| PR's Makefile auto-detects Darwin and sets `-DMACOS`, which selects old byte-swapping `fread`/`fwrite` shims for 2003-era big-endian PowerPC Macs. On modern little-endian Intel and Apple Silicon Macs, those shims corrupt 32-bit fields and produce `.plv` files that apoplexy rejects with `Level has an incorrect size`. | The Apoplexy CMake PR target defines `NOLINUX` on macOS but deliberately does not define `MACOS`, keeping the normal little-endian I/O path with no PR source patch required. |
 
 Apple Silicon note: the script auto-detects `uname -m` and selects `arm64-osx`.
 
@@ -652,7 +652,7 @@ cmake -S . -B build/windows-ucrt64 -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build/windows-ucrt64
 ```
 
-The output binary is `./apoplexy.exe` in the top-level source directory.
+The output binaries are `./apoplexy.exe` and `./pr/pr.exe` in the top-level source directory.
 
 Run cppcheck through the same build tree:
 
@@ -745,15 +745,15 @@ Discuss multiplayer on the Princed forum:
 | Problem | What to check |
 | --- | --- |
 | A game is unavailable on the selection screen | Confirm the files are in `prince/`, `prince2/`, or `snes/` and are readable and writable. |
-| PoP1 DOS or PoP2 DOS import/export fails | Confirm the correct PR executable and XML files exist in `pr/`. On macOS, run `./scripts/build-macos.sh` to build `pr/pr-darwin`. |
-| apoplexy warns `Please use PR 1.3.1 with apoplexy` | The bundled PR version is expected. Do not replace it casually. |
+| PoP1 DOS or PoP2 DOS import/export fails | Confirm the correct PR executable and XML files exist in `pr/`. Run the normal CMake build or platform build script to regenerate them from `third_party/PR`. |
+| apoplexy warns `Please use PR 1.3.1 with apoplexy` | Rebuild the PR helper from the pinned source in `third_party/PR`. |
 | Auto-download fails | Popot.org may be down or unreachable. Download the game/runtime manually and unzip it into the target directory. |
 | DOSBox playtesting fails | Confirm `dosbox` is installed and available on the system path. |
 | SNES playtesting fails | Confirm `zsnes` is installed and available on the system path. |
 | Native PoP1, SDLPoP, or MININIM playtesting fails | Confirm the runtime executable is in `prince/`, `SDLPoP/`, or `MININIM/` and is executable for your OS. |
 | Audio is unwanted | Start with `--noaudio`. |
 | The interface is too small | Press <kbd>Z</kbd> or start with `--zoom`. |
-| macOS `.plv` files are rejected as wrong size | Rebuild with `./scripts/build-macos.sh`; it includes the PR endian workaround. |
+| macOS `.plv` files are rejected as wrong size | Rebuild with `./scripts/build-macos.sh`; the CMake PR target includes the PR endian workaround. |
 | Apple Silicon shows corrupted or changing background graphics | Start with `SDL_RENDER_DRIVER=opengl ./apoplexy`. This avoids a known SDL Metal renderer issue with the current macOS build. |
 
 If apoplexy crashes, has compilation errors, or crashes while building, report the exact actions that triggered the bug and the precise symptoms.
@@ -795,7 +795,7 @@ Some bundled directories and assets have different licensing or copyright status
 
 | Path | Notes |
 | --- | --- |
-| `pr/` | Princed Resources, from https://sourceforge.net/projects/princed/files/PR%20-%20Graphic_Sound%20Editor/. |
+| `third_party/PR/` and generated `pr/` files | Princed Resources, from https://github.com/NagyD/PR. PR is built as a separate helper executable. |
 | `ttf/Bitstream-Vera-Sans-Bold.ttf` | Bitstream Vera font, see https://www.gnome.org/fonts/. |
 | `ttf/Terminus-Bold.ttf` | Terminus font, SIL Open Font License, by Dimitar Zhekov and Tilman Blumenbach. |
 | `wav/` | Game audio assets; game audio rights/caveats belong to Jordan Mechner/Ubisoft. |

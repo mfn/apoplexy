@@ -18,10 +18,13 @@ xml/*
 /.vcpkg-shim/
 /vcpkg_installed/
 
-# PR (Princed Resources) macOS build (no upstream binary; built from
-# pr/PR-1.3.1-prerelease.ZIP by scripts/build-macos.sh).
+# PR (Princed Resources) runtime outputs built from third_party/PR.
 /.pr-build/
+/pr/pr
+/pr/pr.exe
 /pr/pr-darwin
+/pr/resources.xml
+/pr/pop2.xml
 
 # Created by IDE's, in particular Dev-C++.
 /src/apoplexy.dev

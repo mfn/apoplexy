@@ -9,8 +9,6 @@ usage() {
 Usage: scripts/package-release.sh --tag TAG --platform PLATFORM --arch ARCH
 
 PLATFORM must be one of: linux, macos, windows
-For Linux, set APOPLEXY_PR_HELPER to the native PR helper path when it is not
-pr/pr in the repository root.
 EOF
 	exit 2
 }
@@ -61,18 +59,26 @@ copy_tracked \
 	LICENSE
 
 mkdir -p "$stage/pr"
-copy_tracked \
-	pr/resources.xml \
-	pr/pop2.xml \
-	pr/gpl.txt \
-	pr/credits.txt \
-	pr/PR-1.3.1-prerelease.ZIP
+for file in \
+	"$repo_root/pr/resources.xml" \
+	"$repo_root/pr/pop2.xml" \
+	"$repo_root/third_party/PR/LICENSE" \
+	"$repo_root/third_party/PR/README.md"; do
+	if [[ ! -f "$file" ]]; then
+		printf 'missing PR runtime/package file: %s\n' "$file" >&2
+		exit 1
+	fi
+done
+cp "$repo_root/pr/resources.xml" "$stage/pr/resources.xml"
+cp "$repo_root/pr/pop2.xml" "$stage/pr/pop2.xml"
+cp "$repo_root/third_party/PR/LICENSE" "$stage/pr/LICENSE"
+cp "$repo_root/third_party/PR/README.md" "$stage/pr/README.md"
 
 case "$platform" in
 	linux)
 		exe_src="$repo_root/apoplexy"
 		exe_name="apoplexy"
-		pr_src="${APOPLEXY_PR_HELPER:-$repo_root/pr/pr}"
+		pr_src="$repo_root/pr/pr"
 		pr_dest="$stage/pr/pr"
 		archive="$dist_dir/$package.tar.gz"
 		;;
@@ -146,6 +152,8 @@ required=(
 	"$stage/templates/snes"
 	"$stage/pr/resources.xml"
 	"$stage/pr/pop2.xml"
+	"$stage/pr/LICENSE"
+	"$stage/pr/README.md"
 	"$pr_dest"
 	"$stage/prince"
 	"$stage/prince2"

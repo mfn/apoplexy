@@ -55,17 +55,12 @@ jobs:
           cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=RelWithDebInfo
           cmake --build build/linux
           ./apoplexy --version
-
-      - name: Build native PR helper
-        id: pr
-        run: |
-          pr_helper="$(./scripts/build-pr-linux.sh)"
-          echo "path=$pr_helper" >> "$GITHUB_OUTPUT"
-          file "$pr_helper"
+          pr_version="$(./pr/pr --version || true)"
+          printf '%s\n' "$pr_version"
+          grep -F "Princed resources (PR) v1.3.1" <<< "$pr_version"
+          file ./pr/pr
 
       - name: Package release artifact
-        env:
-          APOPLEXY_PR_HELPER: ${{ steps.pr.outputs.path }}
         run: ./scripts/package-release.sh --tag "${{ steps.package.outputs.tag }}" --platform linux --arch "${{ matrix.arch }}"
 
       - name: Upload package artifact
@@ -119,18 +114,13 @@ jobs:
           key: vcpkg-installed-macos-${{ runner.arch }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-installed-macos-${{ runner.arch }}-
 
-      - name: Cache PR build
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: |
-            pr/pr-darwin
-            .pr-build
-          key: pr-darwin-${{ runner.arch }}-${{ hashFiles('pr/PR-1.3.1-prerelease.ZIP') }}
-
       - name: Build apoplexy
         run: |
           ./scripts/build-macos.sh
           ./apoplexy --version
+          pr_version="$(./pr/pr-darwin --version || true)"
+          printf '%s\n' "$pr_version"
+          grep -F "Princed resources (PR) v1.3.1" <<< "$pr_version"
           file ./pr/pr-darwin
 
       - name: Package release artifact
@@ -185,6 +175,9 @@ jobs:
         run: |
           bash scripts/build-windows-msys2.sh
           ./apoplexy.exe --version
+          pr_version="$(./pr/pr.exe --version || true)"
+          printf '%s\n' "$pr_version"
+          grep -F "Princed resources (PR) v1.3.1" <<< "$pr_version"
 
       - name: Package release artifact
         run: ./scripts/package-release.sh --tag "${{ steps.package.outputs.tag }}" --platform windows --arch x86_64

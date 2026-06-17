@@ -754,6 +754,7 @@ Discuss multiplayer on the Princed forum:
 | Audio is unwanted | Start with `--noaudio`. |
 | The interface is too small | Press <kbd>Z</kbd> or start with `--zoom`. |
 | macOS `.plv` files are rejected as wrong size | Rebuild with `./scripts/build-macos.sh`; it includes the PR endian workaround. |
+| Apple Silicon shows corrupted or changing background graphics | Start with `SDL_RENDER_DRIVER=opengl ./apoplexy`. This avoids a known SDL Metal renderer issue with the current macOS build. |
 
 If apoplexy crashes, has compilation errors, or crashes while building, report the exact actions that triggered the bug and the precise symptoms.
 

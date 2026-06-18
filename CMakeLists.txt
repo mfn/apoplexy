@@ -9,6 +9,8 @@ option(APOPLEXY_USE_STATIC_PKGCONFIG
 	"Use pkg-config static dependency link flags" OFF)
 option(APOPLEXY_BUILD_APP
 	"Build the apoplexy executable" ON)
+option(APOPLEXY_BUILD_PR
+	"Build the Princed Resources helper" ON)
 
 set(APOPLEXY_EXTRA_CPPCHECK_FLAGS "" CACHE STRING
 	"Extra flags passed to the cppcheck target")
@@ -150,6 +152,14 @@ if(APOPLEXY_BUILD_APP)
 	if(NOT MSVC AND NOT APPLE)
 		target_link_libraries(apoplexy PRIVATE m)
 	endif()
+endif()
+
+if(APOPLEXY_BUILD_PR)
+	include(cmake/PrincedResources.cmake)
+endif()
+
+if(APOPLEXY_BUILD_APP AND APOPLEXY_BUILD_PR)
+	add_dependencies(apoplexy pr_helper pr_runtime_files)
 endif()
 
 find_program(CPPCHECK_EXECUTABLE NAMES cppcheck)

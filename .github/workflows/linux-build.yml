@@ -5,14 +5,20 @@ on:
     paths:
       - CMakeLists.txt
       - .github/workflows/linux-build.yml
+      - cmake/**
+      - scripts/**
       - src/**
+      - third_party/PR/**
   push:
     branches:
       - main
     paths:
       - CMakeLists.txt
       - .github/workflows/linux-build.yml
+      - cmake/**
+      - scripts/**
       - src/**
+      - third_party/PR/**
   workflow_dispatch:
 
 permissions:
@@ -51,4 +57,8 @@ jobs:
           cmake --build build/linux
 
       - name: Check binary version
-        run: ./apoplexy --version
+        run: |
+          ./apoplexy --version
+          pr_version="$(./pr/pr --version || true)"
+          printf '%s\n' "$pr_version"
+          grep -F "Princed resources (PR) v1.3.1" <<< "$pr_version"

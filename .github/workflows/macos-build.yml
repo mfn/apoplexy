@@ -5,9 +5,10 @@ on:
     paths:
       - CMakeLists.txt
       - .github/workflows/macos-build.yml
-      - pr/PR-1.3.1-prerelease.ZIP
+      - cmake/**
       - scripts/build-macos.sh
       - src/**
+      - third_party/PR/**
       - vcpkg.json
   push:
     branches:
@@ -15,9 +16,10 @@ on:
     paths:
       - CMakeLists.txt
       - .github/workflows/macos-build.yml
-      - pr/PR-1.3.1-prerelease.ZIP
+      - cmake/**
       - scripts/build-macos.sh
       - src/**
+      - third_party/PR/**
       - vcpkg.json
   workflow_dispatch:
 
@@ -61,16 +63,12 @@ jobs:
           key: vcpkg-installed-macos-${{ runner.arch }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-installed-macos-${{ runner.arch }}-
 
-      - name: Cache PR build
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: |
-            pr/pr-darwin
-            .pr-build
-          key: pr-darwin-${{ runner.arch }}-${{ hashFiles('pr/PR-1.3.1-prerelease.ZIP') }}
-
       - name: Build apoplexy
         run: ./scripts/build-macos.sh
 
       - name: Check binary version
-        run: ./apoplexy --version
+        run: |
+          ./apoplexy --version
+          pr_version="$(./pr/pr-darwin --version || true)"
+          printf '%s\n' "$pr_version"
+          grep -F "Princed resources (PR) v1.3.1" <<< "$pr_version"

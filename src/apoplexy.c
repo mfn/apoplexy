@@ -17113,7 +17113,7 @@ void ShowScreen (int iScreenS, SDL_Renderer *screen)
 		DisplayTextLine (31, 5, sText, font1, color_bl, color_wh, 0);
 	}
 
-	if (iEditPoP != 2) { ShowMap(); }
+	if ((iEditPoP != 2) && (iMapOpen == 1)) { ShowMap(); }
 
 	/*** refresh screen ***/
 	if ((iPlaytest != 1) && (iJumpTo != 1))
@@ -37886,6 +37886,7 @@ void MapShow (void)
 		 */
 		SDL_ShowWindow (windowmap);
 		iMapOpen = 1;
+		ShowMap();
 	}
 	/*** SDL_RaiseWindow (window); ***/
 	PlaySound ("wav/screen2or3.wav");

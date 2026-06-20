@@ -31,6 +31,7 @@
 #include <time.h>
 #include <errno.h>
 #include <dirent.h>
+#include <ctype.h>
 #if defined WIN32 || _WIN32 || WIN64 || _WIN64
 #include <windows.h>
 #undef PlaySound
@@ -2767,13 +2768,13 @@ void CheckRequiredFiles (void)
 					(strcmp (stDirent->d_name, "..") != 0))
 				{
 					snprintf (sExtension, 100, "%s", strrchr (stDirent->d_name, '.'));
-					if ((toupper (sExtension[1]) == 'S') &&
-						(toupper (sExtension[2]) == 'M') &&
-						(toupper (sExtension[3]) == 'C'))
+					if ((toupper ((unsigned char)sExtension[1]) == 'S') &&
+						(toupper ((unsigned char)sExtension[2]) == 'M') &&
+						(toupper ((unsigned char)sExtension[3]) == 'C'))
 						{ iFound = 1; } /*** Super Magicom ***/
-					if ((toupper (sExtension[1]) == 'S') &&
-						(toupper (sExtension[2]) == 'F') &&
-						(toupper (sExtension[3]) == 'C'))
+					if ((toupper ((unsigned char)sExtension[1]) == 'S') &&
+						(toupper ((unsigned char)sExtension[2]) == 'F') &&
+						(toupper ((unsigned char)sExtension[3]) == 'C'))
 						{ iFound = 1; } /*** Super Famicom ***/
 					if (iFound == 1)
 					{
@@ -33631,7 +33632,8 @@ int BackKey (SDL_Event event, char cKey, int iLoc)
 	{
 		iShift = 1;
 	}
-	if (iShift == 1) { cRealKey = toupper (cKey); } else { cRealKey = cKey; }
+	if (iShift == 1) { cRealKey = toupper ((unsigned char)cKey); }
+		else { cRealKey = cKey; }
 	if (cCurType == 'r')
 	{
 		switch (cRealKey)
@@ -36456,7 +36458,7 @@ void StringToLower (char *sInput, char *sOutput)
 
 	for (iLoop = 0; sInput[iLoop] != '\0'; iLoop++)
 	{
-		sOutput[iLoop] = tolower (sInput[iLoop]);
+		sOutput[iLoop] = tolower ((unsigned char)sInput[iLoop]);
 	}
 	sOutput[iLoop] = '\0';
 }
@@ -41239,7 +41241,8 @@ void RemoveSpaces (char *sString, int iToUpper)
 		{
 			if (iToUpper == 0)
 				{ sString[iPos] = sString[iLoopChar]; }
-					else { sString[iPos] = toupper (sString[iLoopChar]); }
+					else { sString[iPos] =
+						toupper ((unsigned char)sString[iLoopChar]); }
 			iPos++;
 		}
 	}
@@ -41938,9 +41941,10 @@ void HexEditorKey (char cAdd)
 	{
 		if (cHexInput == ' ')
 		{
-			cHexInput = toupper (cAdd);
+			cHexInput = toupper ((unsigned char)cAdd);
 		} else {
-			snprintf (sString, MAX_DATA, "%c%c", cHexInput, toupper (cAdd));
+			snprintf (sString, MAX_DATA, "%c%c", cHexInput,
+				toupper ((unsigned char)cAdd));
 			luAdd = strtoul (sString, NULL, 16);
 			sHexBytes[iHexCursor] = luAdd;
 			/***/

@@ -2269,8 +2269,9 @@ void substr (char *sString, int iStart, int iLength, char *sOutput);
 void substru (unsigned char *sString, int iStart,
 	int iLength, unsigned char *sOutput);
 int strpos (char *sHaystack, char *sNeedle, int iOffset);
-void XMLValue (char *sLine, char *sKey, char *sValue);
-void XMLTag (char *sLine, char *sTag);
+int XMLValue (char *sLine, char *sKey, char *sValue);
+void RequireXMLValue (char *sLine, char *sKey, char *sValue, int iLine);
+int XMLTag (char *sLine, char *sTag);
 int Block (int iRoom, int iLocation, char *sBlock);
 void ModifyForZSNES (int iLevel);
 void ModifyBack (void);
@@ -3685,6 +3686,10 @@ void LoadXML (char *sFileName)
 	int iTileNumber;
 	int iEventNumber;
 	int iFieldNumber;
+	int iXMLValue;
+	int iEventRoom;
+	int iEventLocation;
+	int iEventNext;
 	char sBitsRoom[8 + 2];
 	char sBitsLocation[8 + 2];
 	char sBitsNext[8 + 2];
@@ -3716,6 +3721,11 @@ void LoadXML (char *sFileName)
 		/*** source ***/
 		if ((iLine == 2) && (iDebug == 1))
 		{
+			if ((int)strlen (sLine) < 56)
+			{
+				printf ("[FAILED] Malformed XML source comment!\n");
+				exit (EXIT_ERROR);
+			}
 			substr (sLine, 26, 19, sDateTime);
 			substr (sLine, 51, strlen (sLine) - 56, sProgram);
 			printf ("[ INFO ] Created on %s by %s.\n", sDateTime, sProgram);
@@ -3724,8 +3734,14 @@ void LoadXML (char *sFileName)
 		/*** level number ***/
 		if (iLine == 3)
 		{
-			XMLValue (sLine, "number", sValue);
-			sLevelNumber[0] = atoi (sValue);
+			RequireXMLValue (sLine, "number", sValue, iLine);
+			iXMLValue = atoi (sValue);
+			if ((iXMLValue < 0) || (iXMLValue > 15))
+			{
+				printf ("[FAILED] Invalid XML level number: %i!\n", iXMLValue);
+				exit (EXIT_ERROR);
+			}
+			sLevelNumber[0] = iXMLValue;
 			snprintf (sString, MAX_DATA, "%02x", sLevelNumber[0]);
 			luLevelNr = strtoul (sString, NULL, 16);
 		}
@@ -3744,35 +3760,66 @@ void LoadXML (char *sFileName)
 					printf ("[FAILED] Could not find \"</rooms>\"!");
 					exit (EXIT_ERROR);
 				}
-				XMLTag (sLine, sTag);
+				if (XMLTag (sLine, sTag) == 0)
+				{
+					if (iEndTag == 0)
+					{
+						printf ("[FAILED] Malformed XML tag on line %i!\n", iLine);
+						exit (EXIT_ERROR);
+					}
+				}
 				if (strcmp (sTag, "room") == 0)
 				{
-					XMLValue (sLine, "number", sValue);
+					RequireXMLValue (sLine, "number", sValue, iLine);
 					iRoomNumber = atoi (sValue);
+					RequireValidRoomNr (iRoomNumber, "XML room");
 					iTileNumber = -1;
 				}
 				if (strcmp (sTag, "tile") == 0)
 				{
+					RequireValidRoomNr (iRoomNumber, "XML tile");
 					iTileNumber++;
-					XMLValue (sLine, "element", sValue);
-					iThingA[iRoomNumber][iTileNumber] = atoi (sValue);
-					XMLValue (sLine, "modifier", sValue);
-					iModifierA[iRoomNumber][iTileNumber][1] = atoi (sValue);
+					if (iTileNumber > 29)
+					{
+						printf ("[FAILED] Too many tiles in XML room %i!\n",
+							iRoomNumber);
+						exit (EXIT_ERROR);
+					}
+					RequireXMLValue (sLine, "element", sValue, iLine);
+					iXMLValue = atoi (sValue);
+					if ((iXMLValue < 0) || (iXMLValue > 255))
+					{
+						printf ("[FAILED] Invalid XML tile element: %i!\n",
+							iXMLValue);
+						exit (EXIT_ERROR);
+					}
+					iThingA[iRoomNumber][iTileNumber] = iXMLValue;
+					RequireXMLValue (sLine, "modifier", sValue, iLine);
+					iXMLValue = atoi (sValue);
+					if ((iXMLValue < 0) || (iXMLValue > 255))
+					{
+						printf ("[FAILED] Invalid XML tile modifier: %i!\n",
+							iXMLValue);
+						exit (EXIT_ERROR);
+					}
+					iModifierA[iRoomNumber][iTileNumber][1] = iXMLValue;
 				}
 				if (strcmp (sTag, "links") == 0)
 				{
-					XMLValue (sLine, "left", sValue);
+					RequireValidRoomNr (iRoomNumber, "XML links");
+					RequireXMLValue (sLine, "left", sValue, iLine);
 					iRoomConnections[iRoomNumber][1] = atoi (sValue);
-					XMLValue (sLine, "right", sValue);
+					RequireXMLValue (sLine, "right", sValue, iLine);
 					iRoomConnections[iRoomNumber][2] = atoi (sValue);
-					XMLValue (sLine, "up", sValue);
+					RequireXMLValue (sLine, "up", sValue, iLine);
 					iRoomConnections[iRoomNumber][3] = atoi (sValue);
-					XMLValue (sLine, "down", sValue);
+					RequireXMLValue (sLine, "down", sValue, iLine);
 					iRoomConnections[iRoomNumber][4] = atoi (sValue);
 				}
 				if (strcmp (sTag, "guard") == 0)
 				{
-					XMLValue (sLine, "location", sValue);
+					RequireValidRoomNr (iRoomNumber, "XML guard");
+					RequireXMLValue (sLine, "location", sValue, iLine);
 					iGuardLocation = atoi (sValue);
 					if (iGuardLocation == 0) /*** no guard ***/
 					{
@@ -3780,22 +3827,38 @@ void LoadXML (char *sFileName)
 					} else if ((iGuardLocation >= 1) && (iGuardLocation <= 30)) {
 						sGuardLocations[iRoomNumber - 1] = iGuardLocation - 1;
 					} else {
-						printf ("[ WARN ] Incorrect guard location \"%i\" in room %i!\n",
+						printf ("[FAILED] Incorrect guard location \"%i\" in room %i!\n",
 							iGuardLocation, iRoomNumber);
+						exit (EXIT_ERROR);
 					}
-					XMLValue (sLine, "direction", sValue);
+					RequireXMLValue (sLine, "direction", sValue, iLine);
 					switch (atoi (sValue))
 					{
 						case 1: sGuardDirections[iRoomNumber - 1] = 0; break;
 						case 2: sGuardDirections[iRoomNumber - 1] = 255; break;
-						default: printf ("[ WARN ] Unknown guard direction!\n"); break;
+						default:
+							printf ("[FAILED] Unknown guard direction!\n");
+							exit (EXIT_ERROR);
 					}
-					XMLValue (sLine, "skill", sValue);
-					sGuardSkills[iRoomNumber - 1] = atoi (sValue);
-					XMLValue (sLine, "colors", sValue);
-					sGuardColors[iRoomNumber - 1] = atoi (sValue);
+					RequireXMLValue (sLine, "skill", sValue, iLine);
+					iXMLValue = atoi (sValue);
+					if ((iXMLValue < 0) || (iXMLValue > 255))
+					{
+						printf ("[FAILED] Invalid guard skill: %i!\n", iXMLValue);
+						exit (EXIT_ERROR);
+					}
+					sGuardSkills[iRoomNumber - 1] = iXMLValue;
+					RequireXMLValue (sLine, "colors", sValue, iLine);
+					iXMLValue = atoi (sValue);
+					if ((iXMLValue < 0) || (iXMLValue > 255))
+					{
+						printf ("[FAILED] Invalid guard colors: %i!\n", iXMLValue);
+						exit (EXIT_ERROR);
+					}
+					sGuardColors[iRoomNumber - 1] = iXMLValue;
 				}
 			} while (iEndTag == 0);
+			ValidateRoomLinksLoaded();
 		}
 
 		/*** events ***/
@@ -3811,22 +3874,44 @@ void LoadXML (char *sFileName)
 					printf ("[FAILED] Could not find \"</events>\"!");
 					exit (EXIT_ERROR);
 				}
-				XMLTag (sLine, sTag);
+				if (XMLTag (sLine, sTag) == 0)
+				{
+					if (iEndTag == 0)
+					{
+						printf ("[FAILED] Malformed XML tag on line %i!\n", iLine);
+						exit (EXIT_ERROR);
+					}
+				}
 				if (strcmp (sTag, "event") == 0)
 				{
 					iEventNumber++;
-					XMLValue (sLine, "number", sValue);
+					if (iEventNumber >= 256)
+					{
+						printf ("[FAILED] Too many XML events!\n");
+						exit (EXIT_ERROR);
+					}
+					RequireXMLValue (sLine, "number", sValue, iLine);
 					if (atoi (sValue) != iEventNumber + 1)
 					{
 						printf ("[FAILED] Events not in the correct order!\n");
 						exit (EXIT_ERROR);
 					}
-					XMLValue (sLine, "room", sValue);
-					IntToBits (atoi (sValue), sBitsRoom, 5);
-					XMLValue (sLine, "location", sValue);
-					IntToBits (atoi (sValue) - 1, sBitsLocation, 5);
-					XMLValue (sLine, "next", sValue);
-					switch (atoi (sValue))
+					RequireXMLValue (sLine, "room", sValue, iLine);
+					iEventRoom = atoi (sValue);
+					if ((iEventRoom != 0) && (IsValidRoomNr (iEventRoom) == 0))
+					{
+						printf ("[FAILED] Invalid XML event room: %i!\n",
+							iEventRoom);
+						exit (EXIT_ERROR);
+					}
+					IntToBits (iEventRoom, sBitsRoom, 5);
+					RequireXMLValue (sLine, "location", sValue, iLine);
+					iEventLocation = atoi (sValue);
+					RequireValidLocationNr (iEventLocation, "XML event");
+					IntToBits (iEventLocation - 1, sBitsLocation, 5);
+					RequireXMLValue (sLine, "next", sValue, iLine);
+					iEventNext = atoi (sValue);
+					switch (iEventNext)
 					{
 						case 0: sBitsNext[0] = '1'; sBitsNext[1] = '\0'; break;
 						case 1: sBitsNext[0] = '0'; sBitsNext[1] = '\0'; break;
@@ -3864,15 +3949,20 @@ void LoadXML (char *sFileName)
 		XMLTag (sLine, sTag);
 		if (strcmp (sTag, "prince") == 0)
 		{
-			XMLValue (sLine, "room", sValue);
+			RequireXMLValue (sLine, "room", sValue, iLine);
 			arKidRoom[1] = strtoul (sValue, NULL, 10);
-			XMLValue (sLine, "location", sValue);
+			RequireValidRoomNr (arKidRoom[1], "XML prince");
+			RequireXMLValue (sLine, "location", sValue, iLine);
 			arKidPos[1] = strtoul (sValue, NULL, 10);
-			XMLValue (sLine, "direction", sValue);
+			RequireValidLocationNr (arKidPos[1], "XML prince");
+			RequireXMLValue (sLine, "direction", sValue, iLine);
 			switch (atoi (sValue))
 			{
 				case 1: arKidDir[1] = 0; break;
 				case 2: arKidDir[1] = 255; break;
+				default:
+					printf ("[FAILED] Unknown prince direction!\n");
+					exit (EXIT_ERROR);
 			}
 			/*** 2 of 4 (DOS) ***/
 			if (((int)luLevelNr == 1) || ((int)luLevelNr == 13))
@@ -3885,9 +3975,15 @@ void LoadXML (char *sFileName)
 		XMLTag (sLine, sTag);
 		if (strcmp (sTag, "userdata") == 0)
 		{
-			XMLValue (sLine, "fields", sValue);
+			RequireXMLValue (sLine, "fields", sValue, iLine);
 			luNumberOfFields = atoi (sValue);
 			iInformationNr = atoi (sValue);
+			if ((iInformationNr < 0) || (iInformationNr > 20))
+			{
+				printf ("[FAILED] Invalid XML user data field count: %i!\n",
+					iInformationNr);
+				exit (EXIT_ERROR);
+			}
 
 			/* It's unlikely anyone will ever use more than 255 fields, so
 			 * I'm using this cheap solution.
@@ -3907,17 +4003,30 @@ void LoadXML (char *sFileName)
 					printf ("[FAILED] Could not find \"</userdata>\"!");
 					exit (EXIT_ERROR);
 				}
-				XMLTag (sLine, sTag);
+				if (XMLTag (sLine, sTag) == 0)
+				{
+					if (iEndTag == 0)
+					{
+						printf ("[FAILED] Malformed XML tag on line %i!\n", iLine);
+						exit (EXIT_ERROR);
+					}
+				}
 				if (strcmp (sTag, "field") == 0)
 				{
 					iFieldNumber++;
 					if (iFieldNumber > (int)luNumberOfFields)
 					{
-						printf ("[ WARN ] More fields than indicated!\n");
+						printf ("[FAILED] More fields than indicated!\n");
+						exit (EXIT_ERROR);
 					}
-					XMLValue (sLine, "key", sValue);
+					if (iFieldNumber > 20)
+					{
+						printf ("[FAILED] Too many XML user data fields!\n");
+						exit (EXIT_ERROR);
+					}
+					RequireXMLValue (sLine, "key", sValue, iLine);
 					snprintf (sInformation[iFieldNumber][0], 100, "%s", sValue);
-					XMLValue (sLine, "value", sValue);
+					RequireXMLValue (sLine, "value", sValue, iLine);
 					snprintf (sInformation[iFieldNumber][1], 100, "%s", sValue);
 				}
 			} while (iEndTag == 0);
@@ -34304,54 +34413,64 @@ int strpos (char *sHaystack, char *sNeedle, int iOffset)
 		else { return ((sTemp - sHaystackTemp) + iOffset); }
 }
 /*****************************************************************************/
-void XMLValue (char *sLine, char *sKey, char *sValue)
+int XMLValue (char *sLine, char *sKey, char *sValue)
 /*****************************************************************************/
 {
-	int iKeyLocation;
-	int iCheckLocation;
-	char sRetTemp[MAX_DATA + 2];
-	char cChar;
-	int iEOV;
+	char sNeedle[MAX_DATA + 2];
+	char *sStart;
+	char *sEnd;
+	int iLength;
 
-	iKeyLocation = strpos (sLine, sKey, 0);
-	iCheckLocation = iKeyLocation + strlen (sKey) + 2;
 	snprintf (sValue, MAX_DATA, "%s", "");
-	iEOV = 0;
-	do {
-		cChar = sLine[iCheckLocation];
-		if (cChar != '"')
-		{
-			snprintf (sRetTemp, MAX_DATA, "%s", sValue);
-			snprintf (sValue, MAX_DATA, "%s%c", sRetTemp, cChar);
-			iCheckLocation++;
-		} else {
-			iEOV = 1;
-		}
-	} while (iEOV != 1);
+	snprintf (sNeedle, MAX_DATA, "%s=\"", sKey);
+	sStart = strstr (sLine, sNeedle);
+	if (sStart == NULL) { return (0); }
+	sStart+=strlen (sNeedle);
+	sEnd = strchr (sStart, '"');
+	if (sEnd == NULL) { return (0); }
+	iLength = (int)(sEnd - sStart);
+	if (iLength >= MAX_DATA) { return (0); }
+	memcpy (sValue, sStart, iLength);
+	sValue[iLength] = '\0';
+
+	return (1);
 }
 /*****************************************************************************/
-void XMLTag (char *sLine, char *sTag)
+void RequireXMLValue (char *sLine, char *sKey, char *sValue, int iLine)
+/*****************************************************************************/
+{
+	if (XMLValue (sLine, sKey, sValue) == 0)
+	{
+		printf ("[FAILED] Missing XML attribute \"%s\" on line %i!\n",
+			sKey, iLine);
+		exit (EXIT_ERROR);
+	}
+}
+/*****************************************************************************/
+int XMLTag (char *sLine, char *sTag)
 /*****************************************************************************/
 {
 	int iCheckLocation;
-	char sRetTemp[MAX_DATA + 2];
 	char cChar;
-	int iEOT;
 
 	snprintf (sTag, MAX_DATA, "%s", "");
+	if (sLine[0] != '<') { return (0); }
 	iCheckLocation = 1;
-	iEOT = 0;
-	do {
+	while (1)
+	{
 		cChar = sLine[iCheckLocation];
+		if (cChar == '\0') { return (0); }
 		if ((cChar != ' ') && (cChar != '>'))
 		{
-			snprintf (sRetTemp, MAX_DATA, "%s", sTag);
-			snprintf (sTag, MAX_DATA, "%s%c", sRetTemp, cChar);
+			if (iCheckLocation >= MAX_DATA) { return (0); }
+			sTag[iCheckLocation - 1] = cChar;
+			sTag[iCheckLocation] = '\0';
 			iCheckLocation++;
 		} else {
-			iEOT = 1;
+			if (iCheckLocation == 1) { return (0); }
+			return (1);
 		}
-	} while (iEOT != 1);
+	}
 }
 /*****************************************************************************/
 int Block (int iRoom, int iLocation, char *sBlock)

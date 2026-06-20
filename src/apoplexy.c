@@ -4898,14 +4898,13 @@ int ReadFromFile (int iFd, char *sWhat, int iSize, unsigned char *sRetString)
 	int iLength;
 	int iRead;
 	char sRead[1 + 2];
-	int iEOF;
+	char *sName;
 
 	if ((iDebug == 1) && (strcmp (sWhat, "") != 0))
 	{
 		printf ("[  OK  ] Loading: %s\n", sWhat);
 	}
 	iLength = 0;
-	iEOF = 0;
 	do {
 		iRead = read (iFd, sRead, 1);
 		switch (iRead)
@@ -4914,13 +4913,18 @@ int ReadFromFile (int iFd, char *sWhat, int iSize, unsigned char *sRetString)
 				printf ("[FAILED] Could not read (1): %s!\n", strerror (errno));
 				exit (EXIT_ERROR);
 				break;
-			case 0: PrIfDe ("[ INFO ] End of level file\n"); iEOF = 1; break;
+			case 0:
+				if (strcmp (sWhat, "") == 0) { sName = "data"; }
+					else { sName = sWhat; }
+				printf ("[FAILED] Unexpected EOF while reading %s!\n", sName);
+				exit (EXIT_ERROR);
+				break;
 			default:
 				sRetString[iLength] = sRead[0];
 				iLength++;
 				break;
 		}
-	} while ((iLength < iSize) && (iEOF == 0));
+	} while (iLength < iSize);
 	sRetString[iLength] = '\0';
 
 	iReadFromFile+=iLength;

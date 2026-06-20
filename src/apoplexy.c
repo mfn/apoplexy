@@ -5031,32 +5031,31 @@ void IntToBits (int iInt, char *sOutput, int iBits)
 	/*** Converts decimal to exactly iBits bits. ***/
 	/*** Example: 255 to 11111111 ***/
 
-	unsigned long luScale;
-	unsigned long luFinal;
-	int iTemp;
-	int iDigit;
-	char sOutputTemp[MAX_DATA + 2];
+	unsigned int uValue;
+	unsigned int uLimit;
+	int iLoop;
+	int iBit;
 
-	iTemp = iInt;
-	luScale = 1;
-	luFinal = 0;
-
-	while (iTemp > 0)
+	if ((iBits <= 0) || (iBits > 30) || (iInt < 0))
 	{
-		iDigit = iTemp % 2;
-		luFinal+=iDigit * luScale;
-		iTemp = iTemp / 2;
-		luScale = luScale * 10;
+		printf ("[FAILED] Cannot convert %i to %i bits!\n", iInt, iBits);
+		exit (EXIT_ERROR);
+	}
+	uValue = (unsigned int)iInt;
+	uLimit = 1U << iBits;
+	if (uValue >= uLimit)
+	{
+		printf ("[FAILED] Cannot fit %i in %i bits!\n", iInt, iBits);
+		exit (EXIT_ERROR);
 	}
 
-	snprintf (sOutput, MAX_DATA, "%lu", luFinal);
-	if ((int)strlen (sOutput) != iBits)
+	for (iLoop = 0; iLoop < iBits; iLoop++)
 	{
-		do {
-			snprintf (sOutputTemp, MAX_DATA, "%s", sOutput);
-			snprintf (sOutput, MAX_DATA, "0%s", sOutputTemp);
-		} while ((int)strlen (sOutput) != iBits);
+		iBit = (uValue >> (iBits - iLoop - 1)) & 1U;
+		if (iBit == 0) { sOutput[iLoop] = '0'; }
+			else { sOutput[iLoop] = '1'; }
 	}
+	sOutput[iBits] = '\0';
 }
 /*****************************************************************************/
 void GetForegroundAsName (char *sBinaryFore, char *sName)

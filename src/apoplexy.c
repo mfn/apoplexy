@@ -2082,6 +2082,7 @@ int InArea (int iUpperLeftX, int iUpperLeftY,
 	int iLowerRightX, int iLowerRightY);
 int InAreaMap (int iUpperLeftX, int iUpperLeftY,
 	int iLowerRightX, int iLowerRightY);
+int MainWindowEventRedraw (SDL_Event event);
 void PreventCPUEating (void);
 void InitScreenAction (char *sAction);
 void InitScreen (void);
@@ -11282,6 +11283,26 @@ int InAreaMap (int iUpperLeftX, int iUpperLeftY,
 	}
 }
 /*****************************************************************************/
+int MainWindowEventRedraw (SDL_Event event)
+/*****************************************************************************/
+{
+	if (event.window.windowID != iWindowID) { return (0); }
+
+	switch (event.window.event)
+	{
+		case SDL_WINDOWEVENT_SIZE_CHANGED:
+		case SDL_WINDOWEVENT_RESIZED:
+		case SDL_WINDOWEVENT_EXPOSED:
+			return (1);
+		case SDL_WINDOWEVENT_CLOSE:
+			Quit(); break;
+		case SDL_WINDOWEVENT_FOCUS_GAINED:
+			iActiveWindowID = iWindowID; break;
+	}
+
+	return (0);
+}
+/*****************************************************************************/
 void PreventCPUEating (void)
 /*****************************************************************************/
 {
@@ -15823,17 +15844,8 @@ void InitScreen (void)
 					ShowScreen (iScreen, ascreen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_SIZE_CHANGED:
-						case SDL_WINDOWEVENT_RESIZED:
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowScreen (iScreen, ascreen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowScreen (iScreen, ascreen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -17763,15 +17775,8 @@ void InitPopUp (void)
 					}
 					ShowPopUp(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowScreen (iScreen, ascreen); ShowPopUp(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowScreen (iScreen, ascreen); ShowPopUp(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -17931,15 +17936,8 @@ int InitPopUpYN (int iYNText)
 					}
 					ShowPopUpYN (iYNText); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowScreen (iScreen, ascreen); ShowPopUpYN (iYNText); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowScreen (iScreen, ascreen); ShowPopUpYN (iYNText); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -19999,15 +19997,8 @@ void ChangePos (int iLocation, SDL_Renderer *screen)
 					ShowChange (iLocation, ascreen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowChange (iLocation, ascreen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowChange (iLocation, ascreen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -20632,15 +20623,8 @@ int ChangePosCustom (int iLocation, SDL_Renderer *screen)
 					ShowChangeCustom (screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowChangeCustom (screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowChangeCustom (screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -21497,15 +21481,8 @@ void ChangeGuards (SDL_Renderer *screen)
 					ShowChangeGuards (screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowChangeGuards (screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowChangeGuards (screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -21895,15 +21872,8 @@ void ChangeMusic (SDL_Renderer *screen)
 					ShowChangeMusic (screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowChangeMusic (screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowChangeMusic (screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -22267,15 +22237,8 @@ int ChangeBackground (int iLocation, SDL_Renderer *screen)
 					ShowChangeBackground (iLocation, screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowChangeBackground (iLocation, screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowChangeBackground (iLocation, screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -22516,15 +22479,8 @@ int PickTemplate (SDL_Renderer *screen)
 					ShowPickTemplate (screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowPickTemplate (screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowPickTemplate (screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -26428,15 +26384,8 @@ void Help (void)
 					}
 					ShowHelp(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowHelp(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowHelp(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -28453,15 +28402,8 @@ void EXE (void)
 					}
 					ShowEXE(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowEXE(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowEXE(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -29319,15 +29261,8 @@ void EXE_F3 (void)
 					}
 					ShowEXE_F3(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowEXE_F3(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowEXE_F3(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -30028,15 +29963,8 @@ void EXE_F4 (void)
 					}
 					ShowEXE_F4(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowEXE_F4(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowEXE_F4(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -30342,15 +30270,8 @@ void EXE_F5 (void)
 					}
 					ShowEXE_F5(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowEXE_F5(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowEXE_F5(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -30699,15 +30620,8 @@ void KidColors (void)
 					}
 					ShowKidColors(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowKidColors(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowKidColors(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -32328,15 +32242,8 @@ void PoP1OrPoP2 (void)
 					}
 					ShowPoP1OrPoP2 (ascreen); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowPoP1OrPoP2 (ascreen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowPoP1OrPoP2 (ascreen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -37157,15 +37064,8 @@ int Native (int iLocation, SDL_Renderer *screen, int iViaCustom)
 					ShowNative (screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowNative (screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowNative (screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -38959,15 +38859,8 @@ void Playtest (int iLevel)
 					ShowPlaytest();
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowPlaytest(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowPlaytest(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -39314,15 +39207,8 @@ void Text (void)
 					}
 					ShowText(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowText(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowText(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -39882,15 +39768,8 @@ void Automatic (void)
 					}
 					ShowAutomatic(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowAutomatic(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowAutomatic(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -40276,15 +40155,8 @@ void JumpTo (int iType)
 					}
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowJumpTo (iType); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowJumpTo (iType); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -41052,15 +40924,8 @@ int Kid (int iLocation, SDL_Renderer *screen)
 					ShowKid (screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowKid (screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowKid (screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -41916,15 +41781,8 @@ void HexEditor (void)
 					ShowHexEditor();
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowHexEditor(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowHexEditor(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;

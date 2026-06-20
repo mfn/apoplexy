@@ -11285,10 +11285,22 @@ int InAreaMap (int iUpperLeftX, int iUpperLeftY,
 void PreventCPUEating (void)
 /*****************************************************************************/
 {
+	SDL_Event event;
+	Uint32 iElapsed;
+	int iWait;
+
 	gamespeed = REFRESH;
-	while ((SDL_GetTicks() - looptime) < gamespeed)
+	iElapsed = SDL_GetTicks() - looptime;
+	if (iElapsed < gamespeed)
 	{
-		SDL_Delay (10);
+		iWait = gamespeed - iElapsed;
+		if (SDL_WaitEventTimeout (&event, iWait) == 1)
+		{
+			if (SDL_PushEvent (&event) < 0)
+			{
+				printf ("[ WARN ] SDL_PushEvent: %s\n", SDL_GetError());
+			}
+		}
 	}
 	looptime = SDL_GetTicks();
 }

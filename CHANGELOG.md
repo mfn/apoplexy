@@ -32,6 +32,7 @@ The format is based on Keep a Changelog. Historical release labels such as
   paths.
 - Fixed game controller setup when multiple controllers or unavailable haptics
   are present.
+- Improved input and window-event responsiveness while the editor is idle.
 - Fixed a startup crash on macOS when optional directories are missing by
   avoiding `closedir(NULL)` in `CheckRequiredFiles()` and `UsesNative()`.
 

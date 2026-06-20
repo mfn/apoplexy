@@ -17992,7 +17992,20 @@ void DisplayText (int iStartX, int iStartY, int iFontSize,
 		{
 			message = TTF_RenderText_Shaded (font,
 				arText[iTemp], color_bl, color_wh);
+			if (message == NULL)
+			{
+				printf ("[ WARN ] TTF_RenderText_Shaded (%s): %s\n",
+					arText[iTemp], TTF_GetError());
+				continue;
+			}
 			messaget = SDL_CreateTextureFromSurface (ascreen, message);
+			if (messaget == NULL)
+			{
+				printf ("[ WARN ] SDL_CreateTextureFromSurface (%s): %s\n",
+					arText[iTemp], SDL_GetError());
+				SDL_FreeSurface (message);
+				continue;
+			}
 			if ((strcmp (arText[iTemp], "single tile (change or select)") == 0) ||
 				(strcmp (arText[iTemp], "entire room (clear or fill)") == 0) ||
 				(strcmp (arText[iTemp], "entire level (randomize or fill)") == 0))
@@ -18013,25 +18026,36 @@ void DisplayTextLine (int iStartX, int iStartY, char sText[MAX_TEXT + 2],
 	TTF_Font *font, SDL_Color fore, SDL_Color back, int iOnMap)
 /*****************************************************************************/
 {
+	SDL_Renderer *screen;
+
 	if (strcmp (sText, "") == 0)
 	{
 		printf ("[ WARN ] Tried to display an empty text.\n");
 	} else {
+		if (iOnMap == 0) { screen = ascreen; } else { screen = mscreen; }
 		message = TTF_RenderText_Shaded (font, sText, fore, back);
-		if (iOnMap == 0)
+		if (message == NULL)
 		{
-			messaget = SDL_CreateTextureFromSurface (ascreen, message);
-		} else {
-			messaget = SDL_CreateTextureFromSurface (mscreen, message);
+			printf ("[ WARN ] TTF_RenderText_Shaded (%s): %s\n",
+				sText, TTF_GetError());
+			return;
+		}
+		messaget = SDL_CreateTextureFromSurface (screen, message);
+		if (messaget == NULL)
+		{
+			printf ("[ WARN ] SDL_CreateTextureFromSurface (%s): %s\n",
+				sText, SDL_GetError());
+			SDL_FreeSurface (message);
+			return;
 		}
 		offset.x = iStartX;
 		offset.y = iStartY;
 		offset.w = message->w; offset.h = message->h;
 		if (iOnMap == 0)
 		{
-			CustomRenderCopy (messaget, "message", NULL, ascreen, &offset);
+			CustomRenderCopy (messaget, "message", NULL, screen, &offset);
 		} else {
-			CustomRenderCopy (messaget, "map message", NULL, mscreen, &offset);
+			CustomRenderCopy (messaget, "map message", NULL, screen, &offset);
 		}
 		SDL_DestroyTexture (messaget); SDL_FreeSurface (message);
 	}
@@ -32511,7 +32535,20 @@ void CenterNumber (SDL_Renderer *screen, int iNumber, int iX, int iY,
 		snprintf (sText, MAX_TEXT, "%02X", iNumber);
 	}
 	message = TTF_RenderText_Shaded (font3, sText, fore, back);
+	if (message == NULL)
+	{
+		printf ("[ WARN ] TTF_RenderText_Shaded (%s): %s\n",
+			sText, TTF_GetError());
+		return;
+	}
 	messaget = SDL_CreateTextureFromSurface (screen, message);
+	if (messaget == NULL)
+	{
+		printf ("[ WARN ] SDL_CreateTextureFromSurface (%s): %s\n",
+			sText, SDL_GetError());
+		SDL_FreeSurface (message);
+		return;
+	}
 	if (iHex == 0)
 	{
 		if ((iNumber >= 0) && (iNumber <= 9))

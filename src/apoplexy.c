@@ -26125,6 +26125,8 @@ void PlaySound (char *sFile)
 	Uint8 *data;
 	Uint32 dlen;
 	SDL_AudioCVT cvt;
+	size_t zAudioSize;
+	size_t zLenMult;
 
 	if ((iNoAudio == 1) || (iSDLAudioOpen != 1)) { return; }
 
@@ -26141,8 +26143,28 @@ void PlaySound (char *sFile)
 		SDL_FreeWAV (data);
 		return;
 	}
+	if (dlen > (Uint32)INT_MAX)
+	{
+		printf ("[ WARN ] Audio file too large: %s.\n", sFile);
+		SDL_FreeWAV (data);
+		return;
+	}
+	if (cvt.len_mult < 0)
+	{
+		printf ("[ WARN ] Invalid audio conversion size for %s.\n", sFile);
+		SDL_FreeWAV (data);
+		return;
+	}
+	zLenMult = (size_t)cvt.len_mult + 1;
+	if ((zLenMult == 0) || ((size_t)dlen > ((size_t)-1) / zLenMult))
+	{
+		printf ("[ WARN ] Audio buffer too large: %s.\n", sFile);
+		SDL_FreeWAV (data);
+		return;
+	}
+	zAudioSize = (size_t)dlen * zLenMult;
 	/*** The "+ 1" is a workaround for SDL bug #2274. ***/
-	cvt.buf = (Uint8 *)malloc (dlen * (cvt.len_mult + 1));
+	cvt.buf = (Uint8 *)malloc (zAudioSize);
 	if (cvt.buf == NULL)
 	{
 		printf ("[ WARN ] Could not allocate audio buffer for %s.\n", sFile);

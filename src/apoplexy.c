@@ -32,6 +32,9 @@
 #include <errno.h>
 #include <dirent.h>
 #include <ctype.h>
+#if !(defined WIN32 || _WIN32 || WIN64 || _WIN64)
+#include <sys/wait.h>
+#endif
 #if defined WIN32 || _WIN32 || WIN64 || _WIN64
 #include <windows.h>
 #undef PlaySound
@@ -2100,7 +2103,9 @@ int StartGame (void *unused);
 int StartGameS (void *unused);
 int StartGameM (void *unused);
 int UPack (void *unused);
+int SystemExitCode (int iStatus);
 int SystemCommandFailed (const char *sCommand);
+int PRCommandFailed (const char *sCommand, int iExpectedExit);
 int HasShellMeta (char *sString);
 void CleanupSDL (void);
 void Quit (void);
@@ -16568,15 +16573,46 @@ int StartGameM (void *unused)
 	return (EXIT_NORMAL);
 }
 /*****************************************************************************/
+int SystemExitCode (int iStatus)
+/*****************************************************************************/
+{
+#if defined WIN32 || _WIN32 || WIN64 || _WIN64
+	return (iStatus);
+#else
+	if (WIFEXITED (iStatus) == 0) { return (-1); }
+
+	return (WEXITSTATUS (iStatus));
+#endif
+}
+/*****************************************************************************/
 int SystemCommandFailed (const char *sCommand)
 /*****************************************************************************/
 {
 	int iStatus;
+	int iExit;
 
 	iStatus = system (sCommand);
-	if (iStatus != 0) { return (1); }
+	if (iStatus == -1) { return (1); }
+	iExit = SystemExitCode (iStatus);
+	if (iExit != 0) { return (1); }
 
 	return (0);
+}
+/*****************************************************************************/
+int PRCommandFailed (const char *sCommand, int iExpectedExit)
+/*****************************************************************************/
+{
+	int iStatus;
+	int iExit;
+
+	iStatus = system (sCommand);
+	if (iStatus == -1) { return (1); }
+	iExit = SystemExitCode (iStatus);
+	if (iExit == -1) { return (1); }
+	if (iExit == 0) { return (0); }
+	if (iExit == iExpectedExit) { return (0); }
+
+	return (1);
 }
 /*****************************************************************************/
 int HasShellMeta (char *sString)
@@ -25890,15 +25926,15 @@ void SavePLV (char *sFileName)
 
 	if (iEditPoP != 2)
 	{
-		if (SystemCommandFailed (PR_EXECUTABLE " -i -f --resource=" PR_RESOURCES
-			" " LEVELS_DAT " > " DEVNULL) == 1)
+		if (PRCommandFailed (PR_EXECUTABLE " -i -f --resource=" PR_RESOURCES
+			" " LEVELS_DAT " > " DEVNULL, 16) == 1)
 		{
 			printf ("[FAILED] Could not import the PoP1 levels: %s!\n",
 				strerror (errno)); exit (EXIT_ERROR);
 		}
 	} else {
-		if (SystemCommandFailed (PR_EXECUTABLE " -ilevels2 -f --resource=" PR_POP2
-			" " PRINCE_DAT " > " DEVNULL) == 1)
+		if (PRCommandFailed (PR_EXECUTABLE " -ilevels2 -f --resource=" PR_POP2
+			" " PRINCE_DAT " > " DEVNULL, 1) == 1)
 		{
 			printf ("[FAILED] Could not import the PoP2 levels: %s!\n",
 				strerror (errno)); exit (EXIT_ERROR);
@@ -33658,8 +33694,8 @@ void PoP1Basics (void)
 	SDL_Thread *upackthread;
 	int iThreadReturn;
 
-	if (SystemCommandFailed (PR_EXECUTABLE " -x -f --resource=" PR_RESOURCES
-		" " LEVELS_DAT " > " DEVNULL) == 1)
+	if (PRCommandFailed (PR_EXECUTABLE " -x -f --resource=" PR_RESOURCES
+		" " LEVELS_DAT " > " DEVNULL, 16) == 1)
 	{
 		printf ("[FAILED] Could not export the levels: %s!\n", strerror (errno));
 		exit (EXIT_ERROR);
@@ -33813,8 +33849,8 @@ void PoP2Basics (void)
 {
 	struct stat stStatus;
 
-	if (SystemCommandFailed (PR_EXECUTABLE " -xlevels2 -f --resource=" PR_POP2
-		" " PRINCE_DAT " > " DEVNULL) == 1)
+	if (PRCommandFailed (PR_EXECUTABLE " -xlevels2 -f --resource=" PR_POP2
+		" " PRINCE_DAT " > " DEVNULL, 1) == 1)
 	{
 		printf ("[FAILED] Could not export the levels: %s!\n", strerror (errno));
 		exit (EXIT_ERROR);

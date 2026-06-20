@@ -4137,6 +4137,13 @@ void LoadSMC (int iLevel)
 	for (iStoreLevel = 1; iStoreLevel <= 27; iStoreLevel++)
 	{
 		iStoredLevelsSizes[iStoreLevel] = CompressedLevelSize (iFd, iStoreLevel);
+		if ((iStoredLevelsSizes[iStoreLevel] < 1) ||
+			(iStoredLevelsSizes[iStoreLevel] > 5000))
+		{
+			printf ("[FAILED] Compressed SNES level %i is too large: %i!\n",
+				iStoreLevel, iStoredLevelsSizes[iStoreLevel]);
+			exit (EXIT_ERROR);
+		}
 		iLevelAddress = GetResourceAddress (iFd, iStoreLevel + 40);
 		LSeek (iFd, iLevelAddress);
 		ReadFromFile (iFd, "", iStoredLevelsSizes[iStoreLevel],
@@ -4267,6 +4274,7 @@ void LoadSMC (int iLevel)
 				sRoomLinks[iTemp + 3]);
 		}
 	}
+	ValidateRoomLinksLoaded();
 
 	/*** Load Start Position. ***/
 	snprintf (sString, MAX_DATA, "%02x", sStartPosition[0]);
@@ -4285,6 +4293,8 @@ void LoadSMC (int iLevel)
 	{
 		arKidRoom[1] = 1; arKidPos[1] = 28;
 	}
+	RequireValidRoomNr (arKidRoom[1], "SNES player start");
+	RequireValidLocationNr (arKidPos[1], "SNES player start");
 	if (iDebug == 1)
 	{
 		printf ("[ INFO ] The kid starts in room: %i, position: %i, turned: "
@@ -4726,6 +4736,7 @@ void Decompress (int iFd, char *sWhat, int iNeed,
 	int iX, iY, iD, iA;
 	int iTemp;
 	int iHave;
+	int iSource;
 
 	if ((iDebug == 1) && (strcmp (sWhat, "") != 0))
 		{ printf ("[  OK  ] Loading: %s\n", sWhat); }
@@ -4743,6 +4754,11 @@ void Decompress (int iFd, char *sWhat, int iNeed,
 		iX = sByte[0];
 		if (iX >= 128)
 		{
+			if (iHave + (iX - 128) > iNeed)
+			{
+				printf ("[FAILED] Decompressed %s is too large!\n", sWhat);
+				exit (EXIT_ERROR);
+			}
 			for (iTemp = 1; iTemp <= iX - 128; iTemp++)
 			{
 				ReadFromFile (iFd, "", 1, sByte);
@@ -4753,6 +4769,11 @@ void Decompress (int iFd, char *sWhat, int iNeed,
 			ReadFromFile (iFd, "", 1, sByte);
 			iY = sByte[0];
 			if (iY == 0) { iY = 256; }
+			if (iHave + iY > iNeed)
+			{
+				printf ("[FAILED] Decompressed %s is too large!\n", sWhat);
+				exit (EXIT_ERROR);
+			}
 			switch (iX)
 			{
 				case 1:
@@ -4789,7 +4810,13 @@ void Decompress (int iFd, char *sWhat, int iNeed,
 					iA = sByte[0];
 					for (iTemp = 1; iTemp <= iY; iTemp++)
 					{
-						sDecompressed[iHave] = sDecompressed[iA + iTemp - 1];
+						iSource = iA + iTemp - 1;
+						if ((iSource < 0) || (iSource >= iHave))
+						{
+							printf ("[FAILED] Invalid copy in %s!\n", sWhat);
+							exit (EXIT_ERROR);
+						}
+						sDecompressed[iHave] = sDecompressed[iSource];
 						iHave++;
 					}
 					break;
@@ -4798,7 +4825,13 @@ void Decompress (int iFd, char *sWhat, int iNeed,
 					iA = BytesAsLU (sTwoByte, 2);
 					for (iTemp = 1; iTemp <= iY; iTemp++)
 					{
-						sDecompressed[iHave] = sDecompressed[iA + iTemp - 1];
+						iSource = iA + iTemp - 1;
+						if ((iSource < 0) || (iSource >= iHave))
+						{
+							printf ("[FAILED] Invalid copy in %s!\n", sWhat);
+							exit (EXIT_ERROR);
+						}
+						sDecompressed[iHave] = sDecompressed[iSource];
 						iHave++;
 					}
 					break;

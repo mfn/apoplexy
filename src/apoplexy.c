@@ -2062,7 +2062,7 @@ void CreateVariousSNES (unsigned char *sVariousS);
 void Decompress (int iFd, char *sWhat, int iNeed,
 	unsigned char *sDecompressed);
 int Compress (char *sWhat, int iNeed, unsigned char *sToCompress,
-	unsigned char *sCompressed);
+	unsigned char *sCompressed, int iCompressedMax);
 int EventInfo (int iNr, int iType);
 int ReadFromFile (int iFd, char *sWhat, int iSize, unsigned char *sRetString);
 int ReadLineFromFile (int iFd, char *sRetString, int iLtrim);
@@ -2163,7 +2163,7 @@ void SavePLV (char *sFileName);
 int WriteUserData (int iFd, int iType);
 void WriteCharByChar (int iFd, unsigned char *sString, int iLength);
 int AddCharByChar (unsigned char *sTo, int iToSize,
-	unsigned char *sString, int iLength);
+	int iToMax, unsigned char *sString, int iLength);
 void ShowUsage (void);
 void PrIfDe (char *sString);
 void MixAudio (void *unused, Uint8 *stream, int iLen);
@@ -4552,20 +4552,25 @@ void SaveSMC (int iLevel)
 					{ arCompData[iComp][iTemp] = '\0'; }
 			}
 			iCompSize[1] = Compress ("Level Background", 720,
-				sLevelBackgroundS, arCompData[1]);
+				sLevelBackgroundS, arCompData[1], 720);
 			iCompSize[2] = Compress ("Level Foreground", 720,
-				sLevelForegroundS, arCompData[2]);
+				sLevelForegroundS, arCompData[2], 720);
 			iCompSize[3] = Compress ("Level Modifier", 720,
-				sLevelModifierS, arCompData[3]);
-			iCompSize[4] = Compress ("Block 1", 256, sBlock1, arCompData[4]);
-			iCompSize[5] = Compress ("Block 2", 256, sBlock2, arCompData[5]);
-			iCompSize[6] = Compress ("Block 3", 256, sBlock3, arCompData[6]);
-			iCompSize[7] = Compress ("Block 4", 256, sBlock4, arCompData[7]);
-			iCompSize[8] = Compress ("Various", 244, sVariousS, arCompData[8]);
+				sLevelModifierS, arCompData[3], 720);
+			iCompSize[4] = Compress ("Block 1", 256,
+				sBlock1, arCompData[4], 720);
+			iCompSize[5] = Compress ("Block 2", 256,
+				sBlock2, arCompData[5], 720);
+			iCompSize[6] = Compress ("Block 3", 256,
+				sBlock3, arCompData[6], 720);
+			iCompSize[7] = Compress ("Block 4", 256,
+				sBlock4, arCompData[7], 720);
+			iCompSize[8] = Compress ("Various", 244,
+				sVariousS, arCompData[8], 720);
 			iCompSize[9] = Compress ("First Door Events", 256,
-				sFirstDoorEvents, arCompData[9]);
+				sFirstDoorEvents, arCompData[9], 720);
 			iCompSize[10] = Compress ("Second Door Events", 256,
-				sSecondDoorEvents, arCompData[10]);
+				sSecondDoorEvents, arCompData[10], 720);
 			iLevelSize = 0;
 			for (iComp = 1; iComp <= 10; iComp++) { iLevelSize+=iCompSize[iComp]; }
 		} else { /*** Other levels. ***/
@@ -4845,7 +4850,7 @@ void Decompress (int iFd, char *sWhat, int iNeed,
 }
 /*****************************************************************************/
 int Compress (char *sWhat, int iNeed, unsigned char *sToCompress,
-	unsigned char *sCompressed)
+	unsigned char *sCompressed, int iCompressedMax)
 /*****************************************************************************/
 {
 	/* Pr1SnesLevEd and apoplexy differ from the original game. For example,
@@ -4969,16 +4974,20 @@ int Compress (char *sWhat, int iNeed, unsigned char *sToCompress,
 			if (iDataLength == 127)
 			{
 				sToAdd[0] = (unsigned char)(iDataLength + 128);
-				iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
-				iSize+=AddCharByChar (sCompressed, iSize, sData, iDataLength);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sToAdd, 1);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sData, iDataLength);
 				iDataLength = 0;
 			}
 		} else { /*** Compress. ***/
 			if (iDataLength > 0)
 			{
 				sToAdd[0] = (unsigned char)(iDataLength + 128);
-				iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
-				iSize+=AddCharByChar (sCompressed, iSize, sData, iDataLength);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sToAdd, 1);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sData, iDataLength);
 				iDataLength = 0;
 			}
 
@@ -4989,31 +4998,39 @@ int Compress (char *sWhat, int iNeed, unsigned char *sToCompress,
 					iX = 5;
 					SSLittleEndianToHexToInts (iSame, &iOut1, &iOut2);
 					sToAdd[0] = (unsigned char)iX;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
 					sToAdd[0] = (unsigned char)iLength;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
 					sToAdd[0] = (unsigned char)iOut2;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
 					sToAdd[0] = (unsigned char)iOut1;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
-					/* Or, also correct:
-					 * iSize+=AddCharByChar (sCompressed, iSize, &iSame, 2);
-					 */
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
+					/*** Or, also correct: add the two iSame bytes directly. ***/
 				} else { /*** X = 4 ***/
 					sToAdd[0] = (unsigned char)iX;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
 					sToAdd[0] = (unsigned char)iLength;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
 					sToAdd[0] = (unsigned char)iSame;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
 				}
 			} else {
 				sToAdd[0] = (unsigned char)iX;
-				iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sToAdd, 1);
 				sToAdd[0] = (unsigned char)iLength;
-				iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sToAdd, 1);
 				sToAdd[0] = (unsigned char)sToCompress[iHave];
-				iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sToAdd, 1);
 			}
 			iHave+=iLength;
 		}
@@ -5023,15 +5040,16 @@ int Compress (char *sWhat, int iNeed, unsigned char *sToCompress,
 	if (iDataLength > 0)
 	{
 		sToAdd[0] = (unsigned char)(iDataLength + 128);
-		iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
-		iSize+=AddCharByChar (sCompressed, iSize, sData, iDataLength);
+		iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax, sToAdd, 1);
+		iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+			sData, iDataLength);
 	}
 
 	/*** Fill the rest with 0x00. ***/
 	while (iHave < iNeed)
 	{
 		sToAdd[0] = (unsigned char)0x00;
-		iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+		iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax, sToAdd, 1);
 	}
 
 	return (iSize);
@@ -25897,16 +25915,24 @@ void WriteCharByChar (int iFd, unsigned char *sString, int iLength)
 }
 /*****************************************************************************/
 int AddCharByChar (unsigned char *sTo, int iToSize,
-	unsigned char *sString, int iLength)
+	int iToMax, unsigned char *sString, int iLength)
 /*****************************************************************************/
 {
 	int iLoop;
 
+	if ((iToSize < 0) || (iLength < 0) || (iToSize + iLength > iToMax))
+	{
+		printf ("[FAILED] Compressed data is too large!\n");
+		exit (EXIT_ERROR);
+	}
 	for (iLoop = 0; iLoop < iLength; iLoop++)
 	{
 		sTo[iToSize + iLoop] = sString[iLoop];
 	}
-	sTo[iToSize + iLoop + 1] = '\0';
+	if (iToSize + iLength < iToMax)
+	{
+		sTo[iToSize + iLength] = '\0';
+	}
 
 	return (iLength);
 }

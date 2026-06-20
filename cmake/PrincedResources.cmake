@@ -3,6 +3,13 @@
 set(APOPLEXY_PR_SOURCE_DIR "${PROJECT_SOURCE_DIR}/third_party/PR/src")
 set(APOPLEXY_PR_RUNTIME_DIR "${PROJECT_SOURCE_DIR}/pr")
 
+if(NOT EXISTS "${APOPLEXY_PR_SOURCE_DIR}/lib/pr.c")
+	message(FATAL_ERROR
+		"Princed Resources submodule is not initialized. "
+		"Run `git submodule update --init --recursive` from the "
+		"repository root.")
+endif()
+
 set(APOPLEXY_PR_SOURCES
 	"${APOPLEXY_PR_SOURCE_DIR}/lib/pr.c"
 	"${APOPLEXY_PR_SOURCE_DIR}/console/main.c"

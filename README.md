@@ -521,6 +521,12 @@ More v2.0 screenshots are on [popot.org](https://www.popot.org/news.php?id=apopl
 
 When building from source, run commands from the top-level source directory unless a step says otherwise. CMake writes the apoplexy binary to the top-level source directory as `./apoplexy` or `./apoplexy.exe`, and builds the Princed Resources helper and XML runtime files into `./pr/`.
 
+The Princed Resources source is a git submodule. Clone with `--recurse-submodules`, or run this once in an existing checkout:
+
+```bash
+git submodule update --init --recursive
+```
+
 ### GNU/Linux
 
 Install prerequisites:
@@ -583,7 +589,7 @@ The script performs these steps:
 | vcpkg checkout | Auto-clones vcpkg into `./.vcpkg/` on first run, or uses `$VCPKG_ROOT` when set. |
 | Dependencies | Resolves `sdl2`, `sdl2-image`, `sdl2-ttf`, and `libzip` from `vcpkg.json`. libcurl intentionally comes from the macOS SDK. |
 | Install tree | Installs libraries into `./vcpkg_installed/<triplet>/`, where the triplet is `x64-osx` or `arm64-osx`. |
-| Princed Resources | Builds PR from `third_party/PR` into `./pr/pr-darwin` and copies runtime XML into `./pr/`. |
+| Princed Resources | Builds PR from the `third_party/PR` submodule into `./pr/pr-darwin` and copies runtime XML into `./pr/`. |
 | apoplexy | Runs CMake in `./build/macos-<triplet>/`; the final binary is `./apoplexy`. |
 
 The first run may take several minutes because SDL2 and related dependencies are compiled from source. Subsequent runs reuse vcpkg's binary cache and should be much faster.
@@ -591,7 +597,7 @@ The first run may take several minutes because SDL2 and related dependencies are
 CLion on macOS:
 
 Run `./scripts/build-macos.sh` once before opening or reloading the project in
-CLion. This populates `vcpkg_installed/` and builds `pr/pr-darwin` from `third_party/PR`. After that,
+CLion. This populates `vcpkg_installed/` and builds `pr/pr-darwin` from the `third_party/PR` submodule. After that,
 reload CMake and build the `apoplexy` CMake target.
 
 Expected linkage:
@@ -745,8 +751,8 @@ Discuss multiplayer on the Princed forum:
 | Problem | What to check |
 | --- | --- |
 | A game is unavailable on the selection screen | Confirm the files are in `prince/`, `prince2/`, or `snes/` and are readable and writable. |
-| PoP1 DOS or PoP2 DOS import/export fails | Confirm the correct PR executable and XML files exist in `pr/`. Run the normal CMake build or platform build script to regenerate them from `third_party/PR`. |
-| apoplexy warns `Please use PR 1.3.1 with apoplexy` | Rebuild the PR helper from the pinned source in `third_party/PR`. |
+| PoP1 DOS or PoP2 DOS import/export fails | Confirm the correct PR executable and XML files exist in `pr/`. Run the normal CMake build or platform build script to regenerate them from the `third_party/PR` submodule. |
+| apoplexy warns `Please use PR 1.3.1 with apoplexy` | Rebuild the PR helper from the pinned submodule source in `third_party/PR`. |
 | Auto-download fails | Popot.org may be down or unreachable. Download the game/runtime manually and unzip it into the target directory. |
 | DOSBox playtesting fails | Confirm `dosbox` is installed and available on the system path. |
 | SNES playtesting fails | Confirm `zsnes` is installed and available on the system path. |
@@ -795,7 +801,7 @@ Some bundled directories and assets have different licensing or copyright status
 
 | Path | Notes |
 | --- | --- |
-| `third_party/PR/` and generated `pr/` files | Princed Resources, from https://github.com/NagyD/PR. PR is built as a separate helper executable. |
+| `third_party/PR/` and generated `pr/` files | Princed Resources source submodule, from https://github.com/NagyD/PR. PR is built as a separate helper executable. |
 | `ttf/Bitstream-Vera-Sans-Bold.ttf` | Bitstream Vera font, see https://www.gnome.org/fonts/. |
 | `ttf/Terminus-Bold.ttf` | Terminus font, SIL Open Font License, by Dimitar Zhekov and Tilman Blumenbach. |
 | `wav/` | Game audio assets; game audio rights/caveats belong to Jordan Mechner/Ubisoft. |

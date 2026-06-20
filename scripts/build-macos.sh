@@ -4,7 +4,7 @@
 # Build apoplexy natively on macOS using a project-local vcpkg.
 # Resolves SDL2/SDL2_image/SDL2_ttf/libzip from vcpkg.json into
 # ./vcpkg_installed/, then builds apoplexy and the Princed Resources (PR)
-# helper from third_party/PR with CMake.
+# helper from the third_party/PR submodule with CMake.
 #
 # Honors $VCPKG_ROOT if set (opt-out for users with a shared vcpkg);
 # otherwise auto-clones vcpkg into ./.vcpkg/ on first run.

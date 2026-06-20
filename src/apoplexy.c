@@ -2213,6 +2213,11 @@ void Sprinkle (void);
 void LoadLevel (int iLevel);
 void GetOptionValue (char *sArgv, char *sValue, int iMax);
 void ValidateEXETypeForGame (int iGame);
+int IsNoRoomLink (int iRoom);
+int IsValidRoomNr (int iRoom);
+void RequireValidRoomNr (int iRoom, char *sWhat);
+void RequireValidLocationNr (int iLocation, char *sWhat);
+void ValidateRoomLinksLoaded (void);
 void FlipRoom (int iRoom, int iAxis);
 void CopyPaste (int iRoom, int iAction);
 void DateTime (char *sDateTime);
@@ -2906,6 +2911,12 @@ void LoadPLV (char *sFileName)
 			{ luLevelNr = iFirstSecond + 1; }
 				else { luLevelNr = iFirstSecond - 5; }
 	}
+	if (((iEditPoP == 1) && (luLevelNr > 15)) ||
+		((iEditPoP == 2) && ((luLevelNr < 1) || (luLevelNr > 28))))
+	{
+		printf ("[FAILED] Invalid level number: %lu!\n", luLevelNr);
+		exit (EXIT_ERROR);
+	}
 	if (iDebug == 1)
 	{
 		printf ("[ INFO ] The level number is: %lu\n", luLevelNr);
@@ -3123,9 +3134,11 @@ void LoadPLV (char *sFileName)
 		{
 			printf ("[ INFO ] Room %i is connected to room (0 = none): l%i, "
 				"r%i, u%i, d%i\n", (iTemp / 4) + 1, sRoomLinks[iTemp],
-				sRoomLinks[iTemp + 1], sRoomLinks[iTemp + 2], sRoomLinks[iTemp + 3]);
+				sRoomLinks[iTemp + 1], sRoomLinks[iTemp + 2],
+				sRoomLinks[iTemp + 3]);
 		}
 	}
+	ValidateRoomLinksLoaded();
 
 	if (iEditPoP == 1)
 	{
@@ -3268,6 +3281,16 @@ void LoadPLV (char *sFileName)
 	arKidRoom[1] = sStartPosition[0];
 	arKidPos[1] = sStartPosition[1] + 1;
 	arKidDir[1] = FixDir (sStartPosition[2]); /*** 1 of 4 (DOS) ***/
+	RequireValidRoomNr (arKidRoom[1], "player start");
+	RequireValidLocationNr (arKidPos[1], "player start");
+	if (iEditPoP == 1)
+	{
+		for (iLoopPlayer = 2; iLoopPlayer <= iNrPlayers; iLoopPlayer++)
+		{
+			RequireValidRoomNr (arKidRoom[iLoopPlayer], "player start");
+			RequireValidLocationNr (arKidPos[iLoopPlayer], "player start");
+		}
+	}
 
 	if (iEditPoP != 1)
 	{
@@ -3317,6 +3340,12 @@ void LoadPLV (char *sFileName)
 		for (iTemp = 0; iTemp < iRooms; iTemp++)
 		{
 			iStaticGuards_Amount[iTemp] = sStaticGuards[(iTemp * 116) + 0];
+			if (iStaticGuards_Amount[iTemp] > STATIC)
+			{
+				printf ("[FAILED] Too many static guards in room %i: %i!\n",
+					iTemp + 1, iStaticGuards_Amount[iTemp]);
+				exit (EXIT_ERROR);
+			}
 			for (iStatic = 0; iStatic < STATIC; iStatic++)
 			{
 				iStaticGuards_1_Locations[iTemp][iStatic] =
@@ -3375,6 +3404,12 @@ void LoadPLV (char *sFileName)
 		for (iTemp = 0; iTemp < iRooms; iTemp++)
 		{
 			iDynamicGuards_Sets[iTemp] = sDynamicGuards[(iTemp * 34) + 0];
+			if (iDynamicGuards_Sets[iTemp] > DYNAMIC)
+			{
+				printf ("[FAILED] Too many dynamic guards in room %i: %i!\n",
+					iTemp + 1, iDynamicGuards_Sets[iTemp]);
+				exit (EXIT_ERROR);
+			}
 			iDynamicGuards_Skill[iTemp] = sDynamicGuards[(iTemp * 34) + 1];
 			iDynamicGuards_Unknown1[iTemp] = sDynamicGuards[(iTemp * 34) + 2];
 			iDynamicGuards_Unknown2[iTemp] = sDynamicGuards[(iTemp * 34) + 3];
@@ -3549,6 +3584,11 @@ void LoadPLV (char *sFileName)
 	{
 		printf ("[ INFO ] The user data count is: %lu\n", luNumber);
 	}
+	if (luNumber > USER_DATA)
+	{
+		printf ("[FAILED] User data is too large: %lu bytes!\n", luNumber);
+		exit (EXIT_ERROR);
+	}
 	ReadFromFile (iFd, "User Data", (int)luNumber, sUserData);
 	snprintf (sString, 100, "%s", "");
 	iInformationNr = 0;
@@ -3557,6 +3597,11 @@ void LoadPLV (char *sFileName)
 	{
 		if (sUserData[iTemp] == '\0')
 		{
+			if (iInformationNr >= 20)
+			{
+				printf ("[FAILED] Too many user data fields!\n");
+				exit (EXIT_ERROR);
+			}
 			snprintf (sInformation[iInformationNr + 1][iFieldOrValue], 100, "%s",
 				sString);
 			snprintf (sString, 100, "%s", "");
@@ -31328,6 +31373,66 @@ void ValidateEXETypeForGame (int iGame)
 				break;
 		}
 		exit (EXIT_ERROR);
+	}
+}
+/*****************************************************************************/
+int IsNoRoomLink (int iRoom)
+/*****************************************************************************/
+{
+	if (iRoom == 0) { return (1); }
+	if ((iEditPoP == 3) && ((iRoom == 254) || (iRoom == 255)))
+		{ return (1); }
+
+	return (0);
+}
+/*****************************************************************************/
+int IsValidRoomNr (int iRoom)
+/*****************************************************************************/
+{
+	if ((iRoom >= 1) && (iRoom <= iRooms)) { return (1); }
+
+	return (0);
+}
+/*****************************************************************************/
+void RequireValidRoomNr (int iRoom, char *sWhat)
+/*****************************************************************************/
+{
+	if (IsValidRoomNr (iRoom) == 0)
+	{
+		printf ("[FAILED] Invalid room for %s: %i!\n", sWhat, iRoom);
+		exit (EXIT_ERROR);
+	}
+}
+/*****************************************************************************/
+void RequireValidLocationNr (int iLocation, char *sWhat)
+/*****************************************************************************/
+{
+	if ((iLocation < 1) || (iLocation > 30))
+	{
+		printf ("[FAILED] Invalid location for %s: %i!\n", sWhat, iLocation);
+		exit (EXIT_ERROR);
+	}
+}
+/*****************************************************************************/
+void ValidateRoomLinksLoaded (void)
+/*****************************************************************************/
+{
+	int iRoom;
+	int iSide;
+	int iLink;
+
+	for (iRoom = 1; iRoom <= iRooms; iRoom++)
+	{
+		for (iSide = 1; iSide <= 4; iSide++)
+		{
+			iLink = iRoomConnections[iRoom][iSide];
+			if ((IsNoRoomLink (iLink) == 0) && (IsValidRoomNr (iLink) == 0))
+			{
+				printf ("[FAILED] Invalid room link: room %i side %i -> %i!\n",
+					iRoom, iSide, iLink);
+				exit (EXIT_ERROR);
+			}
+		}
 	}
 }
 /*****************************************************************************/

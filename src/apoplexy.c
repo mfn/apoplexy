@@ -11874,6 +11874,11 @@ void InitScreen (void)
 		printf ("[FAILED] Unable to set video mode: %s!\n", SDL_GetError());
 		exit (EXIT_ERROR);
 	}
+	if ((IMG_Init (IMG_INIT_PNG) & IMG_INIT_PNG) != IMG_INIT_PNG)
+	{
+		printf ("[FAILED] Unable to init SDL_image: %s!\n", IMG_GetError());
+		exit (EXIT_ERROR);
+	}
 
 	/*** Map window ***/
 	windowmap = SDL_CreateWindow ("Map", SDL_WINDOWPOS_UNDEFINED,
@@ -16336,6 +16341,7 @@ void CleanupSDL (void)
 	if (font4 != NULL) { TTF_CloseFont (font4); font4 = NULL; }
 	if (font5 != NULL) { TTF_CloseFont (font5); font5 = NULL; }
 	if (TTF_WasInit() != 0) { TTF_Quit(); }
+	if (IMG_Init (0) != 0) { IMG_Quit(); }
 
 	if (haptic != NULL)
 	{

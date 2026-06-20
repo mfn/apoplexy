@@ -2100,6 +2100,8 @@ int StartGame (void *unused);
 int StartGameS (void *unused);
 int StartGameM (void *unused);
 int UPack (void *unused);
+int SystemCommandFailed (const char *sCommand);
+int HasShellMeta (char *sString);
 void CleanupSDL (void);
 void Quit (void);
 void ShowScreen (int iScreenS, SDL_Renderer *screen);
@@ -16502,11 +16504,11 @@ int StartGame (void *unused)
 					{ snprintf (sMute, 200, "%s", " -c \"mixer master 0\""); }
 				snprintf (sSystem, 200, "dosbox%s %s -noconsole > %s", sMute,
 					BATCH_FILE, DEVNULL);
-				if (system (sSystem) == -1)
+				if (SystemCommandFailed (sSystem) == 1)
 					{ printf ("[FAILED] Could not execute PoP1 batch file!\n"); }
 			} else {
-				if (system ("cd " POP1_DIR " && "
-					HERE BATCH_FILE_NATIVE " > " DEVNULL) == -1)
+				if (SystemCommandFailed ("cd " POP1_DIR " && "
+					HERE BATCH_FILE_NATIVE " > " DEVNULL) == 1)
 					{ printf ("[FAILED] Could not execute native EXE!\n"); }
 			}
 			break;
@@ -16515,16 +16517,21 @@ int StartGame (void *unused)
 				{ snprintf (sMute, 200, "%s", " -c \"mixer master 0\""); }
 			snprintf (sSystem, 200, "dosbox%s %s -noconsole > %s", sMute,
 				BATCH_FILE_POP2, DEVNULL);
-			if (system (sSystem) == -1)
+			if (SystemCommandFailed (sSystem) == 1)
 				{ printf ("[FAILED] Could not execute PoP2 batch file!\n"); }
 			break;
 		case 3:
+			if (HasShellMeta (sSNESFile) == 1)
+			{
+				printf ("[FAILED] Unsafe SNES ROM file name: %s!\n", sSNESFile);
+				return (EXIT_ERROR);
+			}
 			if (iNoAudio == 1)
 				{ snprintf (sMute, 200, "%s", " -ds"); }
 					else { snprintf (sMute, 200, "%s", " -s"); }
 			snprintf (sSystem, 200, "zsnes%s \"%s\" > %s", sMute,
 				sSNESFile, DEVNULL);
-			if (system (sSystem) == -1)
+			if (SystemCommandFailed (sSystem) == 1)
 				{ printf ("[FAILED] Could not execute ZSNES!\n"); }
 			if (iModified == 1) { ModifyBack(); }
 			break;
@@ -16538,8 +16545,8 @@ int StartGameS (void *unused)
 	if (unused != NULL) { } /*** To prevent warnings. ***/
 
 	PlaySound ("wav/playtest.wav");
-	if (system ("cd " POP1_DIR " && "
-		HERE BATCH_FILE_NATIVE " > " DEVNULL) == -1)
+	if (SystemCommandFailed ("cd " POP1_DIR " && "
+		HERE BATCH_FILE_NATIVE " > " DEVNULL) == 1)
 		{ printf ("[FAILED] Could not execute SDLPoP!\n"); }
 
 	return (EXIT_NORMAL);
@@ -16551,11 +16558,54 @@ int StartGameM (void *unused)
 	if (unused != NULL) { } /*** To prevent warnings. ***/
 
 	PlaySound ("wav/playtest.wav");
-	if (system ("cd " POP1_DIR " && "
-		HERE BATCH_FILE_NATIVE " > " DEVNULL) == -1)
+	if (SystemCommandFailed ("cd " POP1_DIR " && "
+		HERE BATCH_FILE_NATIVE " > " DEVNULL) == 1)
 		{ printf ("[FAILED] Could not execute MININIM!\n"); }
 
 	return (EXIT_NORMAL);
+}
+/*****************************************************************************/
+int SystemCommandFailed (const char *sCommand)
+/*****************************************************************************/
+{
+	int iStatus;
+
+	iStatus = system (sCommand);
+	if (iStatus != 0) { return (1); }
+
+	return (0);
+}
+/*****************************************************************************/
+int HasShellMeta (char *sString)
+/*****************************************************************************/
+{
+	int iLoop;
+
+	for (iLoop = 0; sString[iLoop] != '\0'; iLoop++)
+	{
+		switch (sString[iLoop])
+		{
+			case '$':
+			case '`':
+			case '"':
+			case ';':
+			case '&':
+			case '|':
+			case '<':
+			case '>':
+			case '(':
+			case ')':
+			case '\n':
+			case '\r':
+				return (1);
+#if !(defined WIN32 || _WIN32 || WIN64 || _WIN64)
+			case '\\':
+				return (1);
+#endif
+		}
+	}
+
+	return (0);
 }
 /*****************************************************************************/
 int UPack (void *unused)
@@ -16563,7 +16613,7 @@ int UPack (void *unused)
 {
 	if (unused != NULL) { } /*** To prevent warnings. ***/
 
-	if (system ("dosbox upack.bat -noconsole > " DEVNULL) == -1)
+	if (SystemCommandFailed ("dosbox upack.bat -noconsole > " DEVNULL) == 1)
 		{ printf ("[FAILED] Could not execute upack batch file!\n"); }
 	return (EXIT_NORMAL);
 }
@@ -25838,15 +25888,15 @@ void SavePLV (char *sFileName)
 
 	if (iEditPoP != 2)
 	{
-		if (system (PR_EXECUTABLE " -i -f --resource=" PR_RESOURCES
-			" " LEVELS_DAT " > " DEVNULL) == -1)
+		if (SystemCommandFailed (PR_EXECUTABLE " -i -f --resource=" PR_RESOURCES
+			" " LEVELS_DAT " > " DEVNULL) == 1)
 		{
 			printf ("[FAILED] Could not import the PoP1 levels: %s!\n",
 				strerror (errno)); exit (EXIT_ERROR);
 		}
 	} else {
-		if (system (PR_EXECUTABLE " -ilevels2 -f --resource=" PR_POP2
-			" " PRINCE_DAT " > " DEVNULL) == -1)
+		if (SystemCommandFailed (PR_EXECUTABLE " -ilevels2 -f --resource=" PR_POP2
+			" " PRINCE_DAT " > " DEVNULL) == 1)
 		{
 			printf ("[FAILED] Could not import the PoP2 levels: %s!\n",
 				strerror (errno)); exit (EXIT_ERROR);
@@ -33512,8 +33562,8 @@ void PoP1Basics (void)
 	SDL_Thread *upackthread;
 	int iThreadReturn;
 
-	if (system (PR_EXECUTABLE " -x -f --resource=" PR_RESOURCES
-		" " LEVELS_DAT " > " DEVNULL) == -1)
+	if (SystemCommandFailed (PR_EXECUTABLE " -x -f --resource=" PR_RESOURCES
+		" " LEVELS_DAT " > " DEVNULL) == 1)
 	{
 		printf ("[FAILED] Could not export the levels: %s!\n", strerror (errno));
 		exit (EXIT_ERROR);
@@ -33667,8 +33717,8 @@ void PoP2Basics (void)
 {
 	struct stat stStatus;
 
-	if (system (PR_EXECUTABLE " -xlevels2 -f --resource=" PR_POP2
-		" " PRINCE_DAT " > " DEVNULL) == -1)
+	if (SystemCommandFailed (PR_EXECUTABLE " -xlevels2 -f --resource=" PR_POP2
+		" " PRINCE_DAT " > " DEVNULL) == 1)
 	{
 		printf ("[FAILED] Could not export the levels: %s!\n", strerror (errno));
 		exit (EXIT_ERROR);

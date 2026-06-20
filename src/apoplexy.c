@@ -15060,6 +15060,8 @@ void InitScreen (void)
 
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (0, 50, 25, 430) == 1) /*** left arrow ***/
@@ -15197,6 +15199,8 @@ void InitScreen (void)
 					ShowScreen (iScreen, ascreen);
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iDownAt = 0;
 					iEditLeftOn = 0;
 					iEndLeftOn = 0;
@@ -17630,6 +17634,8 @@ void InitPopUp (void)
 					iYPos = event.motion.y;
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (440, 317, 440 + 85, 317 + 32) == 1) /*** OK ***/
@@ -17640,6 +17646,8 @@ void InitPopUp (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iOKOn = 0;
 					if (event.button.button == 1)
 					{
@@ -17782,6 +17790,8 @@ int InitPopUpYN (int iYNText)
 					iYPos = event.motion.y;
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (167, 317, 167 + 85, 317 + 32) == 1)
@@ -17797,6 +17807,8 @@ int InitPopUpYN (int iYNText)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iYesOn = 0;
 					iNoOn = 0;
 					if (event.button.button == 1)
@@ -19367,6 +19379,8 @@ void ChangePos (int iLocation, SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN: /*** ChangePos ***/
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
 						if (InArea (656, 0, 692, 387) == 1) /*** close ***/
@@ -19429,6 +19443,8 @@ void ChangePos (int iLocation, SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseOn = 0;
 					iBackgroundOn = 0;
 					iTemplatesOn = 0;
@@ -20299,6 +20315,8 @@ int ChangePosCustom (int iLocation, SDL_Renderer *screen)
 					iYPos = event.motion.y;
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (656, 0, 692, 387) == 1) /*** close ***/
@@ -20319,6 +20337,8 @@ int ChangePosCustom (int iLocation, SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseCustomOn = 0;
 					iCustomUseOn = 0;
 					iNativeOn = 0;
@@ -20868,6 +20888,8 @@ void ChangeGuards (SDL_Renderer *screen)
 						{ ShowChangeGuards (screen); }
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (656, 0, 692, 455) == 1) /*** close ***/
@@ -20878,6 +20900,8 @@ void ChangeGuards (SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseGuardsOn = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -21640,6 +21664,8 @@ void ChangeMusic (SDL_Renderer *screen)
 					iYPos = event.motion.y;
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (32, 115, 103, 144) == 1) /*** music all ***/
@@ -21667,6 +21693,8 @@ void ChangeMusic (SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseMusicOn = 0;
 					iMAllOn = 0;
 					iMNoneOn = 0;
@@ -22045,6 +22073,8 @@ int ChangeBackground (int iLocation, SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						/*** CLOSE ***/
@@ -22056,6 +22086,8 @@ int ChangeBackground (int iLocation, SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseBackgroundOn = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -22324,6 +22356,8 @@ int PickTemplate (SDL_Renderer *screen)
 						{ if (iTempHi != 6) { iTempHi = 6; ShowPickTemplate (screen); } }
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						/*** CLOSE ***/
@@ -22335,6 +22369,8 @@ int PickTemplate (SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseTemplateOn = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -26203,6 +26239,8 @@ void Help (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** OK ***/
@@ -26213,6 +26251,8 @@ void Help (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iHelpOK = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -27650,6 +27690,8 @@ void EXE (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -27660,6 +27702,8 @@ void EXE (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iEXESave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -28822,6 +28866,8 @@ void EXE_F3 (void)
 					UpdateStatusBar_F3_1();
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -28832,6 +28878,8 @@ void EXE_F3 (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iEXESave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -29660,6 +29708,8 @@ void EXE_F4 (void)
 					UpdateStatusBar_F4_1();
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -29670,6 +29720,8 @@ void EXE_F4 (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iEXESave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -30077,6 +30129,8 @@ void EXE_F5 (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -30087,6 +30141,8 @@ void EXE_F5 (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iEXESave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -30426,6 +30482,8 @@ void KidColors (void)
 					iYPos = event.motion.y;
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -30436,6 +30494,8 @@ void KidColors (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iKidColorsSave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -32063,6 +32123,8 @@ void PoP1OrPoP2 (void)
 					ShowPoP1OrPoP2 (ascreen);
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if ((iPoP1 == 0) && (InArea (64, 211, 64 + 115, 211 + 32) == 1))
 					{
 						/*** 1 Download ***/
@@ -32082,6 +32144,8 @@ void PoP1OrPoP2 (void)
 					ShowPoP1OrPoP2 (ascreen);
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iOnPoP1 = 0;
 					iOnPoP2 = 0;
 					iOnPoP1SNES = 0;
@@ -36748,6 +36812,8 @@ int Native (int iLocation, SDL_Renderer *screen, int iViaCustom)
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN: /*** ChangePos ***/
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
 						/*** tabs ***/
@@ -36772,6 +36838,8 @@ int Native (int iLocation, SDL_Renderer *screen, int iViaCustom)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseNativeOn = 0;
 					iNativeTabOn = 0;
 
@@ -37407,6 +37475,9 @@ void MapButtonDown (SDL_Event event)
 	float fLowest;
 	int iTileNr;
 
+	iXPosMap = event.button.x;
+	iYPosMap = event.button.y;
+
 	if (event.button.button == 1)
 	{
 		if (InAreaMap (1189, 809, 1189 + 85, 809 + 32) == 1) /*** Close ***/
@@ -37490,6 +37561,9 @@ void MapButtonDown (SDL_Event event)
 void MapButtonUp (SDL_Event event)
 /*****************************************************************************/
 {
+	iXPosMap = event.button.x;
+	iYPosMap = event.button.y;
+
 	iDownAtMap = 0;
 
 	/*** Used for looping. ***/
@@ -38649,6 +38723,8 @@ void Playtest (int iLevel)
 					ShowPlaytest();
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if ((iFoundSDLPoP == 0) &&
 						(InArea (288, 216, 288 + 115, 216 + 32) == 1))
 					{
@@ -38664,6 +38740,8 @@ void Playtest (int iLevel)
 					ShowPlaytest();
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iOnDOSBox = 0;
 					iOnSDLPoP = 0;
 					iOnMININIM = 0;
@@ -39028,6 +39106,8 @@ void Text (void)
 					ShowText();
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -39038,6 +39118,8 @@ void Text (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iTextSave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -39561,6 +39643,8 @@ void Automatic (void)
 					iYPos = event.motion.y;
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -39571,6 +39655,8 @@ void Automatic (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iAutomaticSave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -40008,6 +40094,8 @@ void JumpTo (int iType)
 					ShowJumpTo (iType);
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						JumpToAction (iType, "apply");
@@ -40672,6 +40760,8 @@ int Kid (int iLocation, SDL_Renderer *screen)
 
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						/*** CLOSE ***/
@@ -40683,6 +40773,8 @@ int Kid (int iLocation, SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseKidOn = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -41522,6 +41614,8 @@ void HexEditor (void)
 					UpdateStatusBar_F12_All();
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Close ***/
@@ -41532,6 +41626,8 @@ void HexEditor (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseHexEditorOn = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{

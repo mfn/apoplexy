@@ -28,6 +28,8 @@ The format is based on Keep a Changelog. Historical release labels such as
   submodule.
 
 ### Fixed
+- Fixed mouse button handling using stale pointer coordinates in some SDL event
+  paths.
 - Fixed a startup crash on macOS when optional directories are missing by
   avoiding `closedir(NULL)` in `CheckRequiredFiles()` and `UsesNative()`.
 

@@ -17054,7 +17054,10 @@ void ShowScreen (int iScreenS, SDL_Renderer *screen)
 			{
 				iDone[iTemp] = 0;
 			}
-			ShowRooms (arKidRoom[1], iStartRoomsX, iStartRoomsY, 1);
+			if (IsValidRoomNr (arKidRoom[1]) == 1)
+			{
+				ShowRooms (arKidRoom[1], iStartRoomsX, iStartRoomsY, 1);
+			}
 			iUnusedRooms = 0;
 			for (iTemp = 1; iTemp <= iRooms; iTemp++)
 			{
@@ -17572,7 +17575,6 @@ void WhereToStart (void)
 {
 	int iTemp;
 
-	RequireValidRoomNr (arKidRoom[1], "map start");
 	iMinX = 0;
 	iMaxX = 0;
 	iMinY = 0;
@@ -17581,6 +17583,12 @@ void WhereToStart (void)
 	for (iTemp = 1; iTemp <= iRooms; iTemp++)
 	{
 		iDone[iTemp] = 0;
+	}
+	if (IsValidRoomNr (arKidRoom[1]) == 0)
+	{
+		iStartRoomsX = 12;
+		iStartRoomsY = 12;
+		return;
 	}
 	CheckSides (arKidRoom[1], 0, 0);
 
@@ -17704,6 +17712,9 @@ void SetMapHover (int iRoom, int iX, int iY)
 
 	/*** Used for looping. ***/
 	int iTileLoop;
+	int iLink;
+
+	if (IsValidRoomNr (iRoom) == 0) { return; }
 
 	fRoomStartX = MapGridStartX() + ZoomGet() + ((iX - 1) * (51 * ZoomGet()));
 	fRoomStartY = MapGridStartY() + ZoomGet() + ((iY - 1) * (31 * ZoomGet()));
@@ -17750,29 +17761,17 @@ void SetMapHover (int iRoom, int iX, int iY)
 
 	iDone[iRoom] = 1;
 
-	if ((iRoomConnections[iRoom][1] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][1] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][1] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][1]] != 1))
-		{ SetMapHover (iRoomConnections[iRoom][1], iX - 1, iY); }
+	if ((GetValidRoomLink (iRoom, 1, &iLink) == 1) && (iDone[iLink] != 1))
+		{ SetMapHover (iLink, iX - 1, iY); }
 
-	if ((iRoomConnections[iRoom][2] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][2] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][2] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][2]] != 1))
-		{ SetMapHover (iRoomConnections[iRoom][2], iX + 1, iY); }
+	if ((GetValidRoomLink (iRoom, 2, &iLink) == 1) && (iDone[iLink] != 1))
+		{ SetMapHover (iLink, iX + 1, iY); }
 
-	if ((iRoomConnections[iRoom][3] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][3] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][3] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][3]] != 1))
-		{ SetMapHover (iRoomConnections[iRoom][3], iX, iY - 1); }
+	if ((GetValidRoomLink (iRoom, 3, &iLink) == 1) && (iDone[iLink] != 1))
+		{ SetMapHover (iLink, iX, iY - 1); }
 
-	if ((iRoomConnections[iRoom][4] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][4] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][4] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][4]] != 1))
-		{ SetMapHover (iRoomConnections[iRoom][4], iX, iY + 1); }
+	if ((GetValidRoomLink (iRoom, 4, &iLink) == 1) && (iDone[iLink] != 1))
+		{ SetMapHover (iLink, iX, iY + 1); }
 }
 /*****************************************************************************/
 void ShowRoomsMap (int iRoom, int iX, int iY)
@@ -38510,12 +38509,18 @@ void ShowMap (void)
 
 	/*** Get hover. ***/
 	iMapHoverYes = 0;
-	for (iTemp = 1; iTemp <= iRooms; iTemp++) { iDone[iTemp] = 0; }
-	SetMapHover (arKidRoom[1], iStartRoomsX, iStartRoomsY);
+	if (IsValidRoomNr (arKidRoom[1]) == 1)
+	{
+		for (iTemp = 1; iTemp <= iRooms; iTemp++) { iDone[iTemp] = 0; }
+		SetMapHover (arKidRoom[1], iStartRoomsX, iStartRoomsY);
+	}
 	if (iMapHoverYes == 0) { iMapHoverRoom = 0; }
 
-	for (iTemp = 1; iTemp <= iRooms; iTemp++) { iDone[iTemp] = 0; }
-	ShowRoomsMap (arKidRoom[1], iStartRoomsX, iStartRoomsY);
+	if (IsValidRoomNr (arKidRoom[1]) == 1)
+	{
+		for (iTemp = 1; iTemp <= iRooms; iTemp++) { iDone[iTemp] = 0; }
+		ShowRoomsMap (arKidRoom[1], iStartRoomsX, iStartRoomsY);
+	}
 
 	ShowImageBasic (imgmap, 0, 0, "imgmap", mscreen, 1, 1);
 

@@ -2675,15 +2675,19 @@ void CheckLatest (void)
 	if (curl != NULL)
 	{
 		fFile = fopen ("latest_release.xml", "wb");
+		if (fFile == NULL)
+		{
+			printf ("[ WARN ] Could not create latest_release.xml: %s!\n",
+				strerror (errno));
+			curl_easy_cleanup (curl);
+			return;
+		}
 		curl_easy_setopt (curl, CURLOPT_URL, URL_LATEST);
 		curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, WriteData);
 		curl_easy_setopt (curl, CURLOPT_WRITEDATA, fFile);
 		curl_easy_setopt (curl, CURLOPT_FAILONERROR, 1L);
-		/* Without this, the Windows port will say "Peer certificate cannot be
-		 * authenticated with given CA certificates!". This may be related to
-		 * the (old?) cURL version.
-		 */
-		curl_easy_setopt (curl, CURLOPT_SSL_VERIFYPEER, 0);
+		curl_easy_setopt (curl, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt (curl, CURLOPT_SSL_VERIFYHOST, 2L);
 		/*** Without this, the connect timeout will be 300 seconds. ***/
 		curl_easy_setopt (curl, CURLOPT_CONNECTTIMEOUT, 3L);
 		res = curl_easy_perform (curl);
@@ -2712,6 +2716,7 @@ void CheckLatest (void)
 							iPatch = atoi (sValue); break;
 					}
 				} while (iEOF == 0);
+				close (iFd);
 				if ((iMajor > EDITOR_VERSION_MAJOR) ||
 					((iMajor == EDITOR_VERSION_MAJOR) &&
 					(iMinor > EDITOR_VERSION_MINOR)) ||
@@ -38714,6 +38719,7 @@ int DownloadAndUnzipTo (char *sURLBase, char *sURLFile, char *sDir)
 	struct zip *zip;
 	struct zip_stat zips;
 	struct zip_file *zipf;
+	zip_error_t ziperr;
 	/***/
 	CURL *curl;
 	CURLcode res;
@@ -38723,8 +38729,9 @@ int DownloadAndUnzipTo (char *sURLBase, char *sURLFile, char *sDir)
 	char sLocation[MAX_LOCATION + 2];
 	int iLength;
 	int iFd;
-	unsigned long ulTotal;
-	int iChars;
+	zip_uint64_t ulTotal;
+	zip_int64_t zRead;
+	ssize_t szWritten;
 	char sBuffer[100];
 	int iDeleted;
 	char sError[MAX_ERROR + 2];
@@ -38746,16 +38753,20 @@ int DownloadAndUnzipTo (char *sURLBase, char *sURLFile, char *sDir)
 		return (0);
 	} else {
 		fFile = fopen ("temp.zip", "wb");
+		if (fFile == NULL)
+		{
+			printf ("[ WARN ] Could not create \"temp.zip\": %s!\n",
+				strerror (errno));
+			curl_easy_cleanup (curl);
+			return (0);
+		}
 		snprintf (sURL, 500, "%s%s", sURLBase, sURLFile);
 		curl_easy_setopt (curl, CURLOPT_URL, sURL);
 		curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, WriteData);
 		curl_easy_setopt (curl, CURLOPT_WRITEDATA, fFile);
 		curl_easy_setopt (curl, CURLOPT_FAILONERROR, 1L);
-		/* Without this, the Windows port will say "Peer certificate cannot be
-		 * authenticated with given CA certificates!". This may be related to
-		 * the (old?) cURL version.
-		 */
-		curl_easy_setopt (curl, CURLOPT_SSL_VERIFYPEER, 0);
+		curl_easy_setopt (curl, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt (curl, CURLOPT_SSL_VERIFYHOST, 2L);
 		/*** Without this, the connect timeout will be 300 seconds. ***/
 		curl_easy_setopt (curl, CURLOPT_CONNECTTIMEOUT, 5L);
 		res = curl_easy_perform (curl);
@@ -38770,6 +38781,7 @@ int DownloadAndUnzipTo (char *sURLBase, char *sURLFile, char *sDir)
 			printf ("[ WARN ] %s\n", sWarning);
 			SDL_ShowSimpleMessageBox (SDL_MESSAGEBOX_ERROR,
 				"Warning", sWarning, NULL);
+			return (0);
 		}
 	}
 
@@ -38777,7 +38789,9 @@ int DownloadAndUnzipTo (char *sURLBase, char *sURLFile, char *sDir)
 	zip = zip_open ("temp.zip", 0, &iError);
 	if (zip == NULL)
 	{
-		zip_error_to_str (sError, sizeof (sError), iError, errno);
+		zip_error_init_with_code (&ziperr, iError);
+		snprintf (sError, MAX_ERROR, "%s", zip_error_strerror (&ziperr));
+		zip_error_fini (&ziperr);
 		printf ("[ WARN ] Cannot open \"temp.zip\": %s!\n", sError);
 		return (0);
 	} else {
@@ -38789,28 +38803,93 @@ int DownloadAndUnzipTo (char *sURLBase, char *sURLFile, char *sDir)
 				/*** sZipsName is zips.name without the top-level directory. ***/
 				char sZipsName[MAX_LOCATION + 2];
 				char *sFromSlash = strchr (zips.name, '/');
-				int iOffset = (int)(sFromSlash - zips.name + 1);
+				int iOffset;
+				if (sFromSlash == NULL)
+				{
+					printf ("[ WARN ] ZIP entry has no top-level directory: %s!\n",
+						zips.name);
+					zip_close (zip);
+					return (0);
+				}
+				iOffset = (int)(sFromSlash - zips.name + 1);
 				iLength = strlen (zips.name) - iOffset;
+				if ((iLength <= 0) || (iLength >= MAX_LOCATION))
+				{
+					printf ("[ WARN ] Unsafe ZIP entry length: %s!\n", zips.name);
+					zip_close (zip);
+					return (0);
+				}
 				memcpy (sZipsName, &zips.name[iOffset], iLength);
 				sZipsName[iLength] = '\0';
+				if ((sZipsName[0] == '/') || (strstr (sZipsName, "..") != NULL) ||
+					(strchr (sZipsName, '\\') != NULL))
+				{
+					printf ("[ WARN ] Unsafe ZIP entry path: %s!\n", sZipsName);
+					zip_close (zip);
+					return (0);
+				}
 
-				snprintf (sLocation, MAX_LOCATION, "%s%s%s",
+				iLength = snprintf (sLocation, MAX_LOCATION, "%s%s%s",
 					sDir, SLASH, sZipsName);
+				if ((iLength < 0) || (iLength >= MAX_LOCATION))
+				{
+					printf ("[ WARN ] ZIP output path is too long: %s!\n", sZipsName);
+					zip_close (zip);
+					return (0);
+				}
 				iLength = strlen (sZipsName);
 				if (sZipsName[iLength - 1] == '/')
 				{
 					CreateDir (sLocation);
 				} else {
 					zipf = zip_fopen_index (zip, iFileLoop, 0);
-					iFd = open (sLocation, O_WRONLY|O_TRUNC|O_CREAT|O_BINARY, 0600);
-					ulTotal = 0;
-					while (ulTotal != zips.size)
+					if (zipf == NULL)
 					{
-						iChars = zip_fread (zipf, sBuffer, 100);
-						write (iFd, sBuffer, iChars);
-						ulTotal+=iChars;
+						printf ("[ WARN ] Could not read ZIP entry: %s!\n", sZipsName);
+						zip_close (zip);
+						return (0);
 					}
-					close (iFd);
+					iFd = open (sLocation, O_WRONLY|O_TRUNC|O_CREAT|O_BINARY, 0600);
+					if (iFd == -1)
+					{
+						printf ("[ WARN ] Could not create %s: %s!\n",
+							sLocation, strerror (errno));
+						zip_fclose (zipf);
+						zip_close (zip);
+						return (0);
+					}
+					ulTotal = 0;
+					while (ulTotal < zips.size)
+					{
+						zRead = zip_fread (zipf, sBuffer, 100);
+						if (zRead <= 0)
+						{
+							printf ("[ WARN ] Could not read ZIP entry: %s!\n", sZipsName);
+							close (iFd);
+							zip_fclose (zipf);
+							zip_close (zip);
+							return (0);
+						}
+						szWritten = write (iFd, sBuffer, (size_t)zRead);
+						if (szWritten != zRead)
+						{
+							printf ("[ WARN ] Could not write %s: %s!\n",
+								sLocation, strerror (errno));
+							close (iFd);
+							zip_fclose (zipf);
+							zip_close (zip);
+							return (0);
+						}
+						ulTotal+=(zip_uint64_t)zRead;
+					}
+					if (close (iFd) == -1)
+					{
+						printf ("[ WARN ] Could not close %s: %s!\n",
+							sLocation, strerror (errno));
+						zip_fclose (zipf);
+						zip_close (zip);
+						return (0);
+					}
 					zip_fclose (zipf);
 				}
 			}

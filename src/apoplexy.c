@@ -16437,6 +16437,9 @@ void ShowScreen (int iScreenS, SDL_Renderer *screen)
 	/*** Used for looping. ***/
 	int iLoopPlayer;
 
+	SDL_SetRenderDrawColor (screen, 0x00, 0x00, 0x00, SDL_ALPHA_OPAQUE);
+	SDL_RenderClear (screen);
+
 	/*** black background ***/
 	ShowImage (-4, (int[]){1, 0, 0, 0}, screen, 31, 0, 0, 692, 455);
 
@@ -38084,6 +38087,9 @@ void ShowMap (void)
 {
 	int iTemp;
 	float fLowest;
+
+	SDL_SetRenderDrawColor (mscreen, 0x00, 0x00, 0x00, SDL_ALPHA_OPAQUE);
+	SDL_RenderClear (mscreen);
 
 	ShowImageBasic (imgmapgrid, MapGridStartX(), MapGridStartY(),
 		"imgmapgrid", mscreen, ZoomGet(), 0);

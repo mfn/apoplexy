@@ -15946,6 +15946,7 @@ iFd = open (POP1_DIR BATCH_FILE_NATIVE,
 			printf ("[FAILED] Could not create thread!\n");
 			exit (EXIT_ERROR);
 		}
+		SDL_DetachThread (princethread);
 	}
 
 	if (iEditPoP == 3)
@@ -15958,6 +15959,7 @@ iFd = open (POP1_DIR BATCH_FILE_NATIVE,
 			printf ("[FAILED] Could not create thread!\n");
 			exit (EXIT_ERROR);
 		}
+		SDL_DetachThread (princethread);
 	}
 }
 /*****************************************************************************/
@@ -16012,6 +16014,7 @@ iFd = open (POP1_DIR BATCH_FILE_NATIVE,
 		printf ("[FAILED] Could not create thread!\n");
 		exit (EXIT_ERROR);
 	}
+	SDL_DetachThread (princethread);
 }
 /*****************************************************************************/
 void RunLevelM (int iLevel)
@@ -16072,6 +16075,7 @@ iFd = open (POP1_DIR BATCH_FILE_NATIVE,
 			printf ("[FAILED] Could not create thread!\n");
 			exit (EXIT_ERROR);
 		}
+		SDL_DetachThread (princethread);
 	}
 }
 /*****************************************************************************/

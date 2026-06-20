@@ -2218,6 +2218,7 @@ int IsValidRoomNr (int iRoom);
 void RequireValidRoomNr (int iRoom, char *sWhat);
 void RequireValidLocationNr (int iLocation, char *sWhat);
 void ValidateRoomLinksLoaded (void);
+int GetValidRoomLink (int iRoom, int iSide, int *iLink);
 void FlipRoom (int iRoom, int iAxis);
 void CopyPaste (int iRoom, int iAction);
 void DateTime (char *sDateTime);
@@ -17461,6 +17462,8 @@ void WhereToStart (void)
 /*****************************************************************************/
 {
 	int iTemp;
+
+	RequireValidRoomNr (arKidRoom[1], "map start");
 	iMinX = 0;
 	iMaxX = 0;
 	iMinY = 0;
@@ -17479,12 +17482,14 @@ void WhereToStart (void)
 void CheckSides (int iRoom, int iX, int iY)
 /*****************************************************************************/
 {
+	int iLink;
+
 	if (iX < iMinX) { iMinX = iX; }
 	if (iY < iMinY) { iMinY = iY; }
 	if (iX > iMaxX) { iMaxX = iX; }
 	if (iY > iMaxY) { iMaxY = iY; }
 
-	if ((iEditPoP == 3) && (iRoom > 24))
+	if (IsValidRoomNr (iRoom) == 0)
 	{
 		printf ("[ WARN ] Found an impossible room link in level %lu: %i\n",
 			luLevelNr, iRoom); return;
@@ -17492,29 +17497,17 @@ void CheckSides (int iRoom, int iX, int iY)
 
 	iDone[iRoom] = 1;
 
-	if ((iRoomConnections[iRoom][1] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][1] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][1] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][1]] != 1))
-		{ CheckSides (iRoomConnections[iRoom][1], iX - 1, iY); }
+	if ((GetValidRoomLink (iRoom, 1, &iLink) == 1) && (iDone[iLink] != 1))
+		{ CheckSides (iLink, iX - 1, iY); }
 
-	if ((iRoomConnections[iRoom][2] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][2] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][2] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][2]] != 1))
-		{ CheckSides (iRoomConnections[iRoom][2], iX + 1, iY); }
+	if ((GetValidRoomLink (iRoom, 2, &iLink) == 1) && (iDone[iLink] != 1))
+		{ CheckSides (iLink, iX + 1, iY); }
 
-	if ((iRoomConnections[iRoom][3] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][3] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][3] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][3]] != 1))
-		{ CheckSides (iRoomConnections[iRoom][3], iX, iY - 1); }
+	if ((GetValidRoomLink (iRoom, 3, &iLink) == 1) && (iDone[iLink] != 1))
+		{ CheckSides (iLink, iX, iY - 1); }
 
-	if ((iRoomConnections[iRoom][4] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][4] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][4] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][4]] != 1))
-		{ CheckSides (iRoomConnections[iRoom][4], iX, iY + 1); }
+	if ((GetValidRoomLink (iRoom, 4, &iLink) == 1) && (iDone[iLink] != 1))
+		{ CheckSides (iLink, iX, iY + 1); }
 }
 /*****************************************************************************/
 void ShowRooms (int iRoom, int iX, int iY, int iNext)
@@ -17522,6 +17515,13 @@ void ShowRooms (int iRoom, int iX, int iY, int iNext)
 {
 	char sOnGrid[MAX_GRID + 2];
 	char sTemp[MAX_GRID + 2];
+	int iLink;
+
+	if ((iRoom != -1) && (IsValidRoomNr (iRoom) == 0))
+	{
+		printf ("[ WARN ] Not showing invalid room: %i!\n", iRoom);
+		return;
+	}
 
 	if (iX < 10)
 	{
@@ -17571,31 +17571,19 @@ void ShowRooms (int iRoom, int iX, int iY, int iNext)
 
 	if (iRoom != -1) { iDone[iRoom] = 1; }
 
-	if (iNext == 1)
+	if ((iNext == 1) && (iRoom != -1))
 	{
-		if ((iRoomConnections[iRoom][1] != 0) && /*** DOS ***/
-			(iRoomConnections[iRoom][1] != 254) && /*** SNES ***/
-			(iRoomConnections[iRoom][1] != 255) && /*** SNES ***/
-			(iDone[iRoomConnections[iRoom][1]] != 1))
-			{ ShowRooms (iRoomConnections[iRoom][1], iX - 1, iY, 1); }
+		if ((GetValidRoomLink (iRoom, 1, &iLink) == 1) && (iDone[iLink] != 1))
+			{ ShowRooms (iLink, iX - 1, iY, 1); }
 
-		if ((iRoomConnections[iRoom][2] != 0) && /*** DOS ***/
-			(iRoomConnections[iRoom][2] != 254) && /*** SNES ***/
-			(iRoomConnections[iRoom][2] != 255) && /*** SNES ***/
-			(iDone[iRoomConnections[iRoom][2]] != 1))
-			{ ShowRooms (iRoomConnections[iRoom][2], iX + 1, iY, 1); }
+		if ((GetValidRoomLink (iRoom, 2, &iLink) == 1) && (iDone[iLink] != 1))
+			{ ShowRooms (iLink, iX + 1, iY, 1); }
 
-		if ((iRoomConnections[iRoom][3] != 0) && /*** DOS ***/
-			(iRoomConnections[iRoom][3] != 254) && /*** SNES ***/
-			(iRoomConnections[iRoom][3] != 255) && /*** SNES ***/
-			(iDone[iRoomConnections[iRoom][3]] != 1))
-			{ ShowRooms (iRoomConnections[iRoom][3], iX, iY - 1, 1); }
+		if ((GetValidRoomLink (iRoom, 3, &iLink) == 1) && (iDone[iLink] != 1))
+			{ ShowRooms (iLink, iX, iY - 1, 1); }
 
-		if ((iRoomConnections[iRoom][4] != 0) && /*** DOS ***/
-			(iRoomConnections[iRoom][4] != 254) && /*** SNES ***/
-			(iRoomConnections[iRoom][4] != 255) && /*** SNES ***/
-			(iDone[iRoomConnections[iRoom][4]] != 1))
-			{ ShowRooms (iRoomConnections[iRoom][4], iX, iY + 1, 1); }
+		if ((GetValidRoomLink (iRoom, 4, &iLink) == 1) && (iDone[iLink] != 1))
+			{ ShowRooms (iLink, iX, iY + 1, 1); }
 	}
 }
 /*****************************************************************************/
@@ -17687,6 +17675,13 @@ void ShowRoomsMap (int iRoom, int iX, int iY)
 	float fRoomStartX, fRoomStartY;
 	char sText[MAX_TEXT + 2];
 	int iB1, iB2, iB3, iB4;
+	int iLink;
+
+	if (IsValidRoomNr (iRoom) == 0)
+	{
+		printf ("[ WARN ] Not showing invalid map room: %i!\n", iRoom);
+		return;
+	}
 
 	/*** Used for looping. ***/
 	int iTileLoop;
@@ -17844,29 +17839,17 @@ void ShowRoomsMap (int iRoom, int iX, int iY)
 
 	iDone[iRoom] = 1;
 
-	if ((iRoomConnections[iRoom][1] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][1] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][1] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][1]] != 1))
-		{ ShowRoomsMap (iRoomConnections[iRoom][1], iX - 1, iY); }
+	if ((GetValidRoomLink (iRoom, 1, &iLink) == 1) && (iDone[iLink] != 1))
+		{ ShowRoomsMap (iLink, iX - 1, iY); }
 
-	if ((iRoomConnections[iRoom][2] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][2] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][2] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][2]] != 1))
-		{ ShowRoomsMap (iRoomConnections[iRoom][2], iX + 1, iY); }
+	if ((GetValidRoomLink (iRoom, 2, &iLink) == 1) && (iDone[iLink] != 1))
+		{ ShowRoomsMap (iLink, iX + 1, iY); }
 
-	if ((iRoomConnections[iRoom][3] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][3] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][3] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][3]] != 1))
-		{ ShowRoomsMap (iRoomConnections[iRoom][3], iX, iY - 1); }
+	if ((GetValidRoomLink (iRoom, 3, &iLink) == 1) && (iDone[iLink] != 1))
+		{ ShowRoomsMap (iLink, iX, iY - 1); }
 
-	if ((iRoomConnections[iRoom][4] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][4] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][4] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][4]] != 1))
-		{ ShowRoomsMap (iRoomConnections[iRoom][4], iX, iY + 1); }
+	if ((GetValidRoomLink (iRoom, 4, &iLink) == 1) && (iDone[iLink] != 1))
+		{ ShowRoomsMap (iLink, iX, iY + 1); }
 }
 /*****************************************************************************/
 void InitPopUp (void)
@@ -31543,6 +31526,21 @@ void ValidateRoomLinksLoaded (void)
 			}
 		}
 	}
+}
+/*****************************************************************************/
+int GetValidRoomLink (int iRoom, int iSide, int *iLink)
+/*****************************************************************************/
+{
+	*iLink = iRoomConnections[iRoom][iSide];
+	if (IsNoRoomLink (*iLink) == 1) { return (0); }
+	if (IsValidRoomNr (*iLink) == 0)
+	{
+		printf ("[ WARN ] Ignoring invalid room link: room %i side %i -> %i!\n",
+			iRoom, iSide, *iLink);
+		return (0);
+	}
+
+	return (1);
 }
 /*****************************************************************************/
 void FlipRoom (int iRoom, int iAxis)

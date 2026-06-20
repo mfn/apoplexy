@@ -1,11 +1,18 @@
 ===[GNU/Linux]=================================================================
 
 Prerequisites:
+- cmake
+- pkg-config
 - libsdl2-dev, libsdl2-image-dev and libsdl2-ttf-dev
 - libcurl4-openssl-dev
 - libzip-dev
 
-$ make
+Before building from a fresh clone, initialize the Princed Resources submodule:
+
+$ git submodule update --init --recursive
+
+$ cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=RelWithDebInfo
+$ cmake --build build/linux
 
 ===[macOS]=====================================================================
 
@@ -13,16 +20,16 @@ Tested on: macOS 26 (Intel x86_64), Apple Clang via the `gcc` symlink, Xcode
 Command Line Tools installed.
 
 Dependencies are managed project-locally via vcpkg in manifest mode. Nothing
-is installed system-wide except a single build-time tool (pkg-config), which
-is needed by vcpkg itself, not by apoplexy.
+is installed system-wide except build-time tools (CMake and pkg-config).
 
 Prerequisites:
 - Xcode Command Line Tools (provides clang, make, git, the macOS SDK, and
   the system libcurl that apoplexy links against).
-- pkg-config (a small build-time tool used by vcpkg's port-fixup step):
-  $ brew install pkg-config
+- CMake and pkg-config:
+  $ brew install cmake pkg-config
 
 Build:
+  $ git submodule update --init --recursive
   $ ./scripts/build-macos.sh
 
 The script:
@@ -30,9 +37,9 @@ The script:
   $VCPKG_ROOT if set.
 - Resolves SDL2, SDL2_image, SDL2_ttf, libzip from vcpkg.json and installs
   them into ./vcpkg_installed/<triplet>/ (gitignored).
-- Builds Princed Resources (PR) from third_party/PR into ./pr/pr-darwin
-  (gitignored), and copies runtime XML into ./pr/. src/apoplexy.c's
-  PR_EXECUTABLE define points at pr/pr-darwin on Darwin.
+- Builds Princed Resources (PR) from the third_party/PR submodule into
+  ./pr/pr-darwin (gitignored), and copies runtime XML into ./pr/.
+  src/apoplexy.c's PR_EXECUTABLE define points at pr/pr-darwin on Darwin.
 - Runs CMake. Binary lands at the repo root as ./apoplexy.
 
 The first run compiles SDL2 et al from source (typically several minutes).

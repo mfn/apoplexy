@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          submodules: true
 
       - name: Derive package tag
         id: package
@@ -84,6 +86,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          submodules: true
 
       - name: Derive package tag
         id: package
@@ -144,6 +148,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          submodules: true
 
       - name: Read MSYS2 package list
         id: msys2-deps
@@ -197,6 +203,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          submodules: true
 
       - name: Derive package tag
         id: package
@@ -204,14 +212,25 @@ jobs:
           safe_ref="${GITHUB_REF_NAME//\//-}"
           echo "tag=$safe_ref" >> "$GITHUB_OUTPUT"
 
-      - name: Create pure source archive
+      - name: Create source archive
         run: |
           mkdir -p dist
+          archive_root="apoplexy-${{ steps.package.outputs.tag }}"
+          prefix="$archive_root/"
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
           git archive \
-            --format=tar.gz \
-            --prefix="apoplexy-${{ steps.package.outputs.tag }}/" \
-            -o "dist/apoplexy-${{ steps.package.outputs.tag }}-src.tar.gz" \
-            HEAD
+            --format=tar \
+            --prefix="$prefix" \
+            HEAD | tar -xf - -C "$tmp_dir"
+          git -C third_party/PR archive \
+            --format=tar \
+            --prefix="${prefix}third_party/PR/" \
+            HEAD | tar -xf - -C "$tmp_dir"
+          tar -czf \
+            "dist/apoplexy-${{ steps.package.outputs.tag }}-src.tar.gz" \
+            -C "$tmp_dir" \
+            "$archive_root"
 
       - name: Upload source artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

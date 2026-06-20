@@ -5,9 +5,11 @@ on:
     paths:
       - CMakeLists.txt
       - .github/workflows/linux-build.yml
+      - .gitmodules
       - cmake/**
       - scripts/**
       - src/**
+      - third_party/PR
       - third_party/PR/**
   push:
     branches:
@@ -15,9 +17,11 @@ on:
     paths:
       - CMakeLists.txt
       - .github/workflows/linux-build.yml
+      - .gitmodules
       - cmake/**
       - scripts/**
       - src/**
+      - third_party/PR
       - third_party/PR/**
   workflow_dispatch:
 
@@ -37,6 +41,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          submodules: true
 
       - name: Cache apt packages
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5

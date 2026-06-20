@@ -1,3 +1,0 @@
-Princed Resources upstream:
-https://github.com/NagyD/PR
-Copied from commit 0dbc140f5408be25cfb94e72cc743a09fd53eec8

@@ -18,8 +18,7 @@ xml/*
 /.vcpkg-shim/
 /vcpkg_installed/
 
-# PR (Princed Resources) runtime outputs built from third_party/PR.
-/.pr-build/
+# PR (Princed Resources) runtime outputs built from the third_party/PR submodule.
 /pr/pr
 /pr/pr.exe
 /pr/pr-darwin

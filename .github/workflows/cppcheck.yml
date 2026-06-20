@@ -45,5 +45,7 @@ jobs:
         shell: micromamba-shell {0}
         run: |
           cppcheck --version
-          cmake -S . -B build/cppcheck -DAPOPLEXY_BUILD_APP=OFF
+          cmake -S . -B build/cppcheck \
+            -DAPOPLEXY_BUILD_APP=OFF \
+            -DAPOPLEXY_BUILD_PR=OFF
           cmake --build build/cppcheck --target cppcheck

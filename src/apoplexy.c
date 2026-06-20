@@ -2211,7 +2211,8 @@ void CheckCodes (char *sHex, int iFdEXE);
 void Zoom (int iToggleFull);
 void Sprinkle (void);
 void LoadLevel (int iLevel);
-void GetOptionValue (char *sArgv, char *sValue);
+void GetOptionValue (char *sArgv, char *sValue, int iMax);
+void ValidateEXETypeForGame (int iGame);
 void FlipRoom (int iRoom, int iAxis);
 void CopyPaste (int iRoom, int iAction);
 void DateTime (char *sDateTime);
@@ -2498,7 +2499,7 @@ int main (int argc, char *argv[])
 			else if ((strncmp (argv[iTemp], "-a=", 3) == 0) ||
 				(strncmp (argv[iTemp], "--author=", 9) == 0))
 			{
-				GetOptionValue (argv[iTemp], sAuthor);
+				GetOptionValue (argv[iTemp], sAuthor, MAX_OPTION);
 				if (iDebug == 1)
 					printf ("[ INFO ] Using author name: %s\n", sAuthor);
 			}
@@ -2515,14 +2516,14 @@ int main (int argc, char *argv[])
 			else if ((strncmp (argv[iTemp], "-l=", 3) == 0) ||
 				(strncmp (argv[iTemp], "--level=", 8) == 0))
 			{
-				GetOptionValue (argv[iTemp], sStartLevel);
+				GetOptionValue (argv[iTemp], sStartLevel, MAX_OPTION);
 				iStartLevel = atoi (sStartLevel);
 			}
 			else if ((strncmp (argv[iTemp], "-c=", 3) == 0) ||
 				(strncmp (argv[iTemp], "--cheat=", 8) == 0))
 			{
-				GetOptionValue (argv[iTemp], sCheat1);
-				GetOptionValue (argv[iTemp], sCheat2);
+				GetOptionValue (argv[iTemp], sCheat1, MAX_OPTION);
+				GetOptionValue (argv[iTemp], sCheat2, MAX_OPTION);
 				iUserCode = 1;
 				if (iDebug == 1)
 					printf ("[ INFO ] Using cheat code: %s\n", sCheat1);
@@ -2555,7 +2556,12 @@ int main (int argc, char *argv[])
 			else if ((strncmp (argv[iTemp], "-e=", 3) == 0) ||
 				(strncmp (argv[iTemp], "--exe=", 6) == 0))
 			{
-				GetOptionValue (argv[iTemp], sEXEType);
+				if ((int)strlen (strchr (argv[iTemp], '=') + 1) >= MAX_EXETYPE)
+				{
+					printf ("[FAILED] Executable type is too long!\n");
+					exit (EXIT_ERROR);
+				}
+				GetOptionValue (argv[iTemp], sEXEType, MAX_EXETYPE);
 				/*** PoP1 for DOS ***/
 				if (strcmp (sEXEType, "p0") == 0) { iEXEType = 0; iEXEPacked = 1; }
 				if (strcmp (sEXEType, "u0") == 0) { iEXEType = 1; iEXEPacked = 0; }
@@ -31240,19 +31246,85 @@ void LoadLevel (int iLevel)
 	iYPosMapMoveOffset = 0;
 }
 /*****************************************************************************/
-void GetOptionValue (char *sArgv, char *sValue)
+void GetOptionValue (char *sArgv, char *sValue, int iMax)
 /*****************************************************************************/
 {
-	int iTemp;
-	char sTemp[MAX_OPTION + 2];
+	char *sEquals;
 
-	iTemp = strlen (sArgv) - 1;
-	snprintf (sValue, MAX_OPTION, "%s", "");
-	while (sArgv[iTemp] != '=')
+	if (iMax <= 0) { return; }
+	sEquals = strchr (sArgv, '=');
+	if (sEquals == NULL)
 	{
-		snprintf (sTemp, MAX_OPTION, "%c%s", sArgv[iTemp], sValue);
-		snprintf (sValue, MAX_OPTION, "%s", sTemp);
-		iTemp--;
+		snprintf (sValue, iMax, "%s", "");
+		return;
+	}
+	snprintf (sValue, iMax, "%s", sEquals + 1);
+}
+/*****************************************************************************/
+void ValidateEXETypeForGame (int iGame)
+/*****************************************************************************/
+{
+	int iValid;
+
+	if ((strcmp (sEXEType, "") == 0) ||
+		(strcmp (sEXEType, "missing") == 0) ||
+		(strcmp (sEXEType, "unknown") == 0))
+	{
+		return;
+	}
+
+	iValid = 0;
+	switch (iGame)
+	{
+		case 1:
+			if ((strcmp (sEXEType, "p0") == 0) ||
+				(strcmp (sEXEType, "u0") == 0) ||
+				(strcmp (sEXEType, "p3") == 0) ||
+				(strcmp (sEXEType, "u3") == 0) ||
+				(strcmp (sEXEType, "p4") == 0) ||
+				(strcmp (sEXEType, "u4") == 0))
+			{
+				iValid = 1;
+			}
+			break;
+		case 2:
+			if ((strcmp (sEXEType, "F0") == 0) ||
+				(strcmp (sEXEType, "F1") == 0) ||
+				(strcmp (sEXEType, "IR") == 0) ||
+				(strcmp (sEXEType, "D0") == 0) ||
+				(strcmp (sEXEType, "D1") == 0))
+			{
+				iValid = 1;
+			}
+			break;
+		case 3:
+			if ((strcmp (sEXEType, "JP") == 0) ||
+				(strcmp (sEXEType, "US") == 0) ||
+				(strcmp (sEXEType, "EU") == 0))
+			{
+				iValid = 1;
+			}
+			break;
+	}
+
+	if (iValid == 0)
+	{
+		switch (iGame)
+		{
+			case 1:
+				printf ("[FAILED] Executable type \"%s\" is not valid for PoP1!\n",
+					sEXEType);
+				break;
+			case 2:
+				printf ("[FAILED] Executable type \"%s\" is not valid for PoP2!\n",
+					sEXEType);
+				break;
+			case 3:
+				printf ("[FAILED] Executable type \"%s\" is not valid for SNES!\n",
+					sEXEType);
+				break;
+		}
+		exit (EXIT_ERROR);
 	}
 }
 /*****************************************************************************/
@@ -33171,6 +33243,7 @@ void PoP1Basics (void)
 	iRoomLinks = 24 * 4;
 	iTileW = 120; iTileH = 155;
 	if ((iStartLevel < 0) || (iStartLevel > 15)) { iStartLevel = 1; }
+	ValidateEXETypeForGame (1);
 
 	/*** Figure out the executable's type. ***/
 	if (strcmp (sEXEType, "") == 0)
@@ -33325,6 +33398,7 @@ void PoP2Basics (void)
 	iRoomLinks = 32 * 4;
 	iTileW = 116; iTileH = 154;
 	if ((iStartLevel < 1) || (iStartLevel > 28)) { iStartLevel = 1; }
+	ValidateEXETypeForGame (2);
 
 	/*** Figure out the executable's type. ***/
 	if (strcmp (sEXEType, "") == 0)
@@ -33382,6 +33456,7 @@ void PoP1SNESBasics (void)
 	iRoomLinks = 24 * 4;
 	iTileW = 98; iTileH = 130;
 	if ((iStartLevel < 1) || (iStartLevel > 27)) { iStartLevel = 1; }
+	ValidateEXETypeForGame (3);
 
 	/*** Check for the header. ***/
 	stat (sSNESFile, &stStatus);

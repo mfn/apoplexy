@@ -25783,6 +25783,11 @@ void MixAudio (void *unused, Uint8 *stream, int iLen)
 	SDL_memset (stream, 0, iLen); /*** SDL2 ***/
 	for (iTemp = 0; iTemp < NUM_SOUNDS; iTemp++)
 	{
+		if ((sounds[iTemp].data == NULL) ||
+			(sounds[iTemp].dpos >= sounds[iTemp].dlen))
+		{
+			continue;
+		}
 		iAmount = (sounds[iTemp].dlen-sounds[iTemp].dpos);
 		if (iAmount > iLen)
 		{
@@ -25798,43 +25803,66 @@ void PlaySound (char *sFile)
 /*****************************************************************************/
 {
 	int iIndex;
+	int iBuild;
 	SDL_AudioSpec wave;
 	Uint8 *data;
 	Uint32 dlen;
 	SDL_AudioCVT cvt;
 
-	if (iNoAudio == 1) { return; }
-	for (iIndex = 0; iIndex < NUM_SOUNDS; iIndex++)
-	{
-		if (sounds[iIndex].dpos == sounds[iIndex].dlen)
-		{
-			break;
-		}
-	}
-	if (iIndex == NUM_SOUNDS) { return; }
+	if ((iNoAudio == 1) || (iSDLAudioOpen != 1)) { return; }
 
 	if (SDL_LoadWAV (sFile, &wave, &data, &dlen) == NULL)
 	{
 		printf ("[FAILED] Could not load %s: %s!\n", sFile, SDL_GetError());
 		exit (EXIT_ERROR);
 	}
-	SDL_BuildAudioCVT (&cvt, wave.format, wave.channels, wave.freq, AUDIO_S16, 2,
-		44100);
+	iBuild = SDL_BuildAudioCVT (&cvt, wave.format, wave.channels, wave.freq,
+		AUDIO_S16, 2, 44100);
+	if (iBuild < 0)
+	{
+		printf ("[ WARN ] SDL_BuildAudioCVT (%s): %s\n", sFile, SDL_GetError());
+		SDL_FreeWAV (data);
+		return;
+	}
 	/*** The "+ 1" is a workaround for SDL bug #2274. ***/
 	cvt.buf = (Uint8 *)malloc (dlen * (cvt.len_mult + 1));
+	if (cvt.buf == NULL)
+	{
+		printf ("[ WARN ] Could not allocate audio buffer for %s.\n", sFile);
+		SDL_FreeWAV (data);
+		return;
+	}
 	memcpy (cvt.buf, data, dlen);
 	cvt.len = dlen;
-	SDL_ConvertAudio (&cvt);
+	if (SDL_ConvertAudio (&cvt) != 0)
+	{
+		printf ("[ WARN ] SDL_ConvertAudio (%s): %s\n", sFile, SDL_GetError());
+		free (cvt.buf);
+		SDL_FreeWAV (data);
+		return;
+	}
 	SDL_FreeWAV (data);
 
-	if (sounds[iIndex].data)
-	{
-		free (sounds[iIndex].data);
-	}
 	SDL_LockAudio();
-	sounds[iIndex].data = cvt.buf;
-	sounds[iIndex].dlen = cvt.len_cvt;
-	sounds[iIndex].dpos = 0;
+	for (iIndex = 0; iIndex < NUM_SOUNDS; iIndex++)
+	{
+		if (sounds[iIndex].dpos >= sounds[iIndex].dlen)
+		{
+			break;
+		}
+	}
+	if (iIndex != NUM_SOUNDS)
+	{
+		if (sounds[iIndex].data != NULL)
+		{
+			free (sounds[iIndex].data);
+		}
+		sounds[iIndex].data = cvt.buf;
+		sounds[iIndex].dlen = cvt.len_cvt;
+		sounds[iIndex].dpos = 0;
+	} else {
+		free (cvt.buf);
+	}
 	SDL_UnlockAudio();
 }
 /*****************************************************************************/

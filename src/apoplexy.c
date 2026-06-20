@@ -11975,22 +11975,32 @@ void InitScreen (void)
 					iController = 1;
 
 					/*** Just for fun, use haptic. ***/
-					if (SDL_JoystickIsHaptic (joystick))
+					if ((joystick != NULL) && (SDL_JoystickIsHaptic (joystick)))
 					{
 						haptic = SDL_HapticOpenFromJoystick (joystick);
-						if (SDL_HapticRumbleInit (haptic) == 0)
+						if (haptic == NULL)
 						{
+							printf ("[ WARN ] Could not open the haptic device: %s\n",
+								SDL_GetError());
+						} else if (SDL_HapticRumbleInit (haptic) == 0) {
 							SDL_HapticRumblePlay (haptic, 1.0, 1000);
 						} else {
 							printf ("[ WARN ] Could not initialize the haptic device: %s\n",
 								SDL_GetError());
 						}
 					} else {
-						PrIfDe ("[ INFO ] The game controller is not haptic.\n");
+						if (joystick == NULL)
+						{
+							printf ("[ WARN ] Could not get controller joystick: %s\n",
+								SDL_GetError());
+						} else {
+							PrIfDe ("[ INFO ] The game controller is not haptic.\n");
+						}
 					}
+					break;
 				} else {
 					printf ("[ WARN ] Could not open game controller %i: %s\n",
-						iController, SDL_GetError());
+						iJoyNr, SDL_GetError());
 				}
 			}
 		}

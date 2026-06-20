@@ -41529,6 +41529,7 @@ void HexEditor (void)
 	int iFileSize;
 	int iFdEXE;
 	char cAdd;
+	char *sClipboard;
 	char sTempLine[MAX_DATA + 2];
 
 	/*** Used for looping. ***/
@@ -41720,18 +41721,26 @@ void HexEditor (void)
 							if ((event.key.keysym.mod & KMOD_LCTRL) ||
 								(event.key.keysym.mod & KMOD_RCTRL))
 							{
+								sClipboard = SDL_GetClipboardText();
+								if (sClipboard == NULL)
+								{
+									printf ("[ WARN ] SDL_GetClipboardText: %s\n",
+										SDL_GetError());
+									break;
+								}
 								if ((iTextHover == 1) && (strlen (arTextH[1]) < MAX_TEXT_JUMP))
 								{
 									snprintf (sTempLine, MAX_DATA, "%s", arTextH[1]);
 									snprintf (arTextH[1], MAX_TEXT_JUMP + 1,
-										"%s%s", sTempLine, SDL_GetClipboardText());
+										"%s%s", sTempLine, sClipboard);
 								}
 								if ((iTextHover == 2) && (strlen (arTextH[2]) < MAX_TEXT_FIND))
 								{
 									snprintf (sTempLine, MAX_DATA, "%s", arTextH[2]);
 									snprintf (arTextH[2], MAX_TEXT_FIND + 1,
-										"%s%s", sTempLine, SDL_GetClipboardText());
+										"%s%s", sTempLine, sClipboard);
 								}
+								SDL_free (sClipboard);
 							}
 							break;
 						default: break;

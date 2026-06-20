@@ -414,6 +414,7 @@ Uint32 looptime;
 
 int iDebug;
 int iNoAudio;
+int iSDLAudioOpen;
 int iNoChomp;
 int iNoAnim;
 int iNoController;
@@ -2097,6 +2098,7 @@ int StartGame (void *unused);
 int StartGameS (void *unused);
 int StartGameM (void *unused);
 int UPack (void *unused);
+void CleanupSDL (void);
 void Quit (void);
 void ShowScreen (int iScreenS, SDL_Renderer *screen);
 void Prev (int iCurLevel);
@@ -2377,6 +2379,7 @@ int main (int argc, char *argv[])
 
 	iDebug = 0;
 	iNoAudio = 0;
+	iSDLAudioOpen = 0;
 	iNoChomp = 1;
 	iNoAnim = 0;
 	iNoController = 0;
@@ -11850,7 +11853,7 @@ void InitScreen (void)
 		printf ("[FAILED] Unable to init SDL: %s!\n", SDL_GetError());
 		exit (EXIT_ERROR);
 	}
-	atexit (SDL_Quit);
+	atexit (CleanupSDL);
 
 	/*** main window ***/
 	iWindowFlags = SDL_WINDOW_RESIZABLE | iFullscreen;
@@ -11920,6 +11923,7 @@ void InitScreen (void)
 			exit (EXIT_ERROR);
 		}
 		SDL_PauseAudio (0);
+		iSDLAudioOpen = 1;
 	}
 
 	/*** main window icon ***/
@@ -16288,6 +16292,66 @@ int UPack (void *unused)
 	return (EXIT_NORMAL);
 }
 /*****************************************************************************/
+void CleanupSDL (void)
+/*****************************************************************************/
+{
+	static int iCleanedSDL = 0;
+	int iTemp;
+
+	if (iCleanedSDL == 1) { return; }
+	iCleanedSDL = 1;
+
+	if (iSDLAudioOpen == 1)
+	{
+		SDL_CloseAudio();
+		iSDLAudioOpen = 0;
+	}
+
+	for (iTemp = 0; iTemp < NUM_SOUNDS; iTemp++)
+	{
+		if (sounds[iTemp].data != NULL)
+		{
+			free (sounds[iTemp].data);
+			sounds[iTemp].data = NULL;
+		}
+		sounds[iTemp].dpos = 0;
+		sounds[iTemp].dlen = 0;
+	}
+
+	if (font1 != NULL) { TTF_CloseFont (font1); font1 = NULL; }
+	if (font2 != NULL) { TTF_CloseFont (font2); font2 = NULL; }
+	if (font3 != NULL) { TTF_CloseFont (font3); font3 = NULL; }
+	if (font4 != NULL) { TTF_CloseFont (font4); font4 = NULL; }
+	if (font5 != NULL) { TTF_CloseFont (font5); font5 = NULL; }
+	if (TTF_WasInit() != 0) { TTF_Quit(); }
+
+	if (haptic != NULL)
+	{
+		SDL_HapticRumbleStop (haptic);
+		SDL_HapticClose (haptic);
+		haptic = NULL;
+	}
+	if (controller != NULL)
+	{
+		SDL_GameControllerClose (controller);
+		controller = NULL;
+	}
+	joystick = NULL;
+	iController = 0;
+
+	if (curArrow != NULL) { SDL_FreeCursor (curArrow); curArrow = NULL; }
+	if (curWait != NULL) { SDL_FreeCursor (curWait); curWait = NULL; }
+	if (curHand != NULL) { SDL_FreeCursor (curHand); curHand = NULL; }
+	if (curText != NULL) { SDL_FreeCursor (curText); curText = NULL; }
+
+	if (mscreen != NULL) { SDL_DestroyRenderer (mscreen); mscreen = NULL; }
+	if (ascreen != NULL) { SDL_DestroyRenderer (ascreen); ascreen = NULL; }
+	if (windowmap != NULL) { SDL_DestroyWindow (windowmap); windowmap = NULL; }
+	if (window != NULL) { SDL_DestroyWindow (window); window = NULL; }
+
+	if (SDL_WasInit (0) != 0) { SDL_Quit(); }
+}
+/*****************************************************************************/
 void Quit (void)
 /*****************************************************************************/
 {
@@ -16299,13 +16363,7 @@ void Quit (void)
 	{
 		if (iYesNo == 2) { CallSave (0); }
 		if (iModified == 1) { ModifyBack(); }
-		TTF_CloseFont (font1);
-		TTF_CloseFont (font2);
-		TTF_CloseFont (font3);
-		TTF_CloseFont (font4);
-		TTF_CloseFont (font5);
-		TTF_Quit();
-		SDL_Quit();
+		CleanupSDL();
 		exit (EXIT_NORMAL);
 	}
 }

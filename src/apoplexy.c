@@ -11929,12 +11929,24 @@ void InitScreen (void)
 	/*** main window icon ***/
 	snprintf (sImage, MAX_IMG, "%s%s", PNG_VARIOUS, "apoplexy_icon.png");
 	imgicon = IMG_Load (sImage);
-	SDL_SetWindowIcon (window, imgicon);
+	if (imgicon != NULL)
+	{
+		SDL_SetWindowIcon (window, imgicon);
+		SDL_FreeSurface (imgicon);
+	} else {
+		printf ("[ WARN ] IMG_Load (%s): %s\n", sImage, IMG_GetError());
+	}
 
 	/*** Map window icon ***/
 	snprintf (sImage, MAX_IMG, "%s%s", PNG_VARIOUS, "map_icon.png");
 	imgicon = IMG_Load (sImage);
-	SDL_SetWindowIcon (windowmap, imgicon);
+	if (imgicon != NULL)
+	{
+		SDL_SetWindowIcon (windowmap, imgicon);
+		SDL_FreeSurface (imgicon);
+	} else {
+		printf ("[ WARN ] IMG_Load (%s): %s\n", sImage, IMG_GetError());
+	}
 
 	/*** Open the first available controller. ***/
 	iController = 0;

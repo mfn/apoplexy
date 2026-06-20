@@ -2163,6 +2163,9 @@ void CallSave (int iJustXML);
 int ChecksumOrWrite (int iFd);
 void SavePLV (char *sFileName);
 int WriteUserData (int iFd, int iType);
+void WriteAll (int iFd, const void *pData, size_t zSize, const char *sWhat);
+void WriteString (int iFd, const char *sString, const char *sWhat);
+void CloseFileChecked (int iFd, const char *sWhat);
 void WriteCharByChar (int iFd, unsigned char *sString, int iLength);
 int AddCharByChar (unsigned char *sTo, int iToSize,
 	int iToMax, unsigned char *sString, int iLength);
@@ -25475,7 +25478,7 @@ int ChecksumOrWrite (int iFd)
 			snprintf (sToWrite, MAX_TOWRITE, "%c", iThingA[iTemp][iTemp2]);
 			if (iFd == -1)
 				{ lSum+=sToWrite[0]; }
-					else { write (iFd, sToWrite, 1); }
+					else { WriteAll (iFd, sToWrite, 1, "level data"); }
 		}
 	}
 
@@ -25491,14 +25494,14 @@ int ChecksumOrWrite (int iFd)
 				snprintf (sToWrite, MAX_TOWRITE, "%c", iModifierA[iTemp][iTemp2][1]);
 				if (iFd == -1)
 					{ lSum+=sToWrite[0]; }
-						else { write (iFd, sToWrite, 1); }
+						else { WriteAll (iFd, sToWrite, 1, "level data"); }
 			} else {
 				snprintf (sToWrite, MAX_TOWRITE, "%c%c%c%c",
 					iModifierA[iTemp][iTemp2][1], iModifierA[iTemp][iTemp2][2],
 					iModifierA[iTemp][iTemp2][3], iModifierA[iTemp][iTemp2][4]);
 				if (iFd == -1)
 					{ for (iSC = 0; iSC < 4; iSC++) { lSum+=sToWrite[iSC]; } }
-						else { write (iFd, sToWrite, 4); }
+						else { WriteAll (iFd, sToWrite, 4, "level data"); }
 			}
 		}
 	}
@@ -25521,7 +25524,7 @@ int ChecksumOrWrite (int iFd)
 				iPoP2DoorLeft[iTemp], iPoP2DoorRight[iTemp]);
 			if (iFd == -1)
 				{ for (iSC = 0; iSC < 5; iSC++) { lSum+=sToWrite[iSC]; } }
-					else { write (iFd, sToWrite, 5); }
+					else { WriteAll (iFd, sToWrite, 5, "level data"); }
 		}
 	}
 
@@ -25534,7 +25537,7 @@ int ChecksumOrWrite (int iFd)
 			iRoomConnections[((int)((iTemp - 1) / 4)) + 1][((iTemp - 1) % 4) + 1]);
 		if (iFd == -1)
 			{ lSum+=sToWrite[0]; }
-				else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 	}
 
 /*** PoP1 = 2048; PoP2 = 6208 ***/
@@ -25571,13 +25574,13 @@ int ChecksumOrWrite (int iFd)
 				arKidClr[1]);
 		if (iFd == -1)
 			{ for (iSC = 0; iSC < 64; iSC++) { lSum+=sToWrite[iSC]; } }
-				else { write (iFd, sToWrite, 64); }
+				else { WriteAll (iFd, sToWrite, 64, "level data"); }
 	} else {
 		/*** Instead of saving sLastRoom; always use 32. ***/
 		snprintf (sToWrite, MAX_TOWRITE, "%c", 32);
 		if (iFd == -1)
 			{ lSum+=sToWrite[0]; }
-				else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 
 		if (iFd == -1)
 			{ for (iSC = 0; iSC < 4; iSC++) { lSum+=sJEFF[iSC]; } }
@@ -25585,15 +25588,15 @@ int ChecksumOrWrite (int iFd)
 		snprintf (sToWrite, MAX_TOWRITE, "%c", iEXEEnvPoP2);
 		if (iFd == -1)
 			{ lSum+=sToWrite[0]; }
-				else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 		if (iFd == -1)
 			{ lSum+=sUnknownI[0]; }
-				else { write (iFd, sUnknownI, 1); }
+				else { WriteAll (iFd, sUnknownI, 1, "level data"); }
 
 		/*** Instead of saving sLevelInit; fixes gameplay lv2 problem. ***/
 		if (iFd == -1)
 			{ lSum+=sLevelNumber[0]; }
-				else { write (iFd, sLevelNumber, 1); }
+				else { WriteAll (iFd, sLevelNumber, 1, "level data"); }
 
 		/*** Instead of saving sExtraImgResources; enable more resources. ***/
 		if (iEXEEnvPoP2 == 0x05)
@@ -25634,7 +25637,7 @@ int ChecksumOrWrite (int iFd)
 		}
 		if (iFd == -1)
 			{ for (iSC = 0; iSC < 24; iSC++) { lSum+=sToWrite[iSC]; } }
-				else { write (iFd, sToWrite, 24); }
+				else { WriteAll (iFd, sToWrite, 24, "level data"); }
 	}
 
 /*** PoP1 = 2112; PoP2 = 6240 ***/
@@ -25642,11 +25645,11 @@ int ChecksumOrWrite (int iFd)
 	snprintf (sToWrite, MAX_TOWRITE, "%c", arKidRoom[1]);
 	if (iFd == -1)
 		{ lSum+=sToWrite[0]; }
-			else { write (iFd, sToWrite, 1); }
+			else { WriteAll (iFd, sToWrite, 1, "level data"); }
 	snprintf (sToWrite, MAX_TOWRITE, "%c", arKidPos[1] - 1);
 	if (iFd == -1)
 		{ lSum+=sToWrite[0]; }
-			else { write (iFd, sToWrite, 1); }
+			else { WriteAll (iFd, sToWrite, 1, "level data"); }
 	snprintf (sToWrite, MAX_TOWRITE, "%c", FixDir (arKidDir[1]));
 	/*** 3 of 4 (DOS) ***/
 	if (iEditPoP != 1)
@@ -25663,7 +25666,7 @@ int ChecksumOrWrite (int iFd)
 	}
 	if (iFd == -1)
 		{ lSum+=sToWrite[0]; }
-			else { write (iFd, sToWrite, 1); }
+			else { WriteAll (iFd, sToWrite, 1, "level data"); }
 
 /*** PoP1 = 2115; PoP2 = 6243 ***/
 
@@ -25710,13 +25713,13 @@ int ChecksumOrWrite (int iFd)
 		snprintf (sToWrite, MAX_TOWRITE, "%c", iEXEGuardTypePoP2);
 		if (iFd == -1)
 			{ lSum+=sToWrite[0]; }
-				else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 		for (iTemp = 0; iTemp < iRooms; iTemp++)
 		{
 			snprintf (sToWrite, MAX_TOWRITE, "%c", iStaticGuards_Amount[iTemp]);
 			if (iFd == -1)
 				{ lSum+=sToWrite[0]; }
-					else { write (iFd, sToWrite, 1); }
+					else { WriteAll (iFd, sToWrite, 1, "level data"); }
 			for (iTemp2 = 0; iTemp2 < 5; iTemp2++)
 			{
 				if (iStaticGuards_16_Type[iTemp][iTemp2] != 2)
@@ -25772,7 +25775,7 @@ int ChecksumOrWrite (int iFd)
 					iStaticGuards_23_Unknown[iTemp][iTemp2]);
 				if (iFd == -1)
 					{ for (iSC = 0; iSC < 23; iSC++) { lSum+=sToWrite[iSC]; } }
-						else { write (iFd, sToWrite, 23); }
+						else { WriteAll (iFd, sToWrite, 23, "level data"); }
 			}
 		}
 		snprintf (sToWrite, MAX_TOWRITE, "%c%c%c%c%c%c%c%c%c%c"
@@ -25784,25 +25787,25 @@ int ChecksumOrWrite (int iFd)
 			iCheckPoints[15], iCheckPoints[16], iCheckPoints[17]);
 		if (iFd == -1)
 			{ for (iSC = 0; iSC < 18; iSC++) { lSum+=sToWrite[iSC]; } }
-				else { write (iFd, sToWrite, 18); }
+				else { WriteAll (iFd, sToWrite, 18, "level data"); }
 		for (iTemp = 0; iTemp < iRooms; iTemp++)
 		{
 			snprintf (sToWrite, MAX_TOWRITE, "%c", iDynamicGuards_Sets[iTemp]);
 			if (iFd == -1)
 				{ lSum+=sToWrite[0]; }
-					else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 			snprintf (sToWrite, MAX_TOWRITE, "%c", iDynamicGuards_Skill[iTemp]);
 			if (iFd == -1)
 				{ lSum+=sToWrite[0]; }
-					else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 			snprintf (sToWrite, MAX_TOWRITE, "%c", iDynamicGuards_Unknown1[iTemp]);
 			if (iFd == -1)
 				{ lSum+=sToWrite[0]; }
-					else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 			snprintf (sToWrite, MAX_TOWRITE, "%c", iDynamicGuards_Unknown2[iTemp]);
 			if (iFd == -1)
 				{ lSum+=sToWrite[0]; }
-					else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 			for (iTemp2 = 0; iTemp2 < 3; iTemp2++)
 			{
 				snprintf (sToWrite, MAX_TOWRITE,
@@ -25819,7 +25822,7 @@ int ChecksumOrWrite (int iFd)
 					iDynamicGuards_10_Hitpoints[iTemp][iTemp2]);
 				if (iFd == -1)
 					{ for (iSC = 0; iSC < 10; iSC++) { lSum+=sToWrite[iSC]; } }
-						else { write (iFd, sToWrite, 10); }
+						else { WriteAll (iFd, sToWrite, 10, "level data"); }
 			}
 		}
 		if (iFd == -1)
@@ -25867,7 +25870,7 @@ void SavePLV (char *sFileName)
 	WriteCharByChar (iFd, sNumberOfFields, 4);
 	WriteCharByChar (iFd, sLevelSize, 4);
 	snprintf (sToWrite, MAX_TOWRITE, "%c", ChecksumOrWrite (-1));
-	write (iFd, sToWrite, 1);
+	WriteAll (iFd, sToWrite, 1, "level file");
 
 	ChecksumOrWrite (iFd);
 
@@ -25879,12 +25882,12 @@ void SavePLV (char *sFileName)
 			sToTemp[7 - (2 * iTemp)]);
 		sscanf (sToWrite, "%x", &iHex);
 		snprintf (sToWrite, MAX_TOWRITE, "%c", iHex);
-		write (iFd, sToWrite, 1);
+		WriteAll (iFd, sToWrite, 1, "level file");
 	}
 
 	WriteUserData (iFd, 1);
 
-	close (iFd);
+	CloseFileChecked (iFd, "level file");
 
 	if (iEditPoP != 2)
 	{
@@ -25920,10 +25923,10 @@ int WriteUserData (int iFd, int iType)
 	for (iTemp = 1; iTemp <= iInformationNr; iTemp++)
 	{
 		snprintf (sToWrite, MAX_TOWRITE, "%s", sInformation[iTemp][0]);
-		if (iType == 1) { write (iFd, sToWrite, strlen (sToWrite)); }
+		if (iType == 1) { WriteString (iFd, sToWrite, "user data"); }
 			else { iChars += strlen (sToWrite); }
 		snprintf (sToWrite, MAX_TOWRITE, "%c", 0x00);
-		if (iType == 1) { write (iFd, sToWrite, 1); }
+		if (iType == 1) { WriteAll (iFd, sToWrite, 1, "user data"); }
 			else { iChars += 1; }
 		if (strcmp (sInformation[iTemp][0], "Editor Name") == 0)
 		{
@@ -25946,14 +25949,58 @@ int WriteUserData (int iFd, int iType)
 		{
 			snprintf (sToWrite, MAX_TOWRITE, "%s", sInformation[iTemp][1]);
 		}
-		if (iType == 1) { write (iFd, sToWrite, strlen (sToWrite)); }
+		if (iType == 1) { WriteString (iFd, sToWrite, "user data"); }
 			else { iChars += strlen (sToWrite); }
 		snprintf (sToWrite, MAX_TOWRITE, "%c", 0x00);
-		if (iType == 1) { write (iFd, sToWrite, 1); }
+		if (iType == 1) { WriteAll (iFd, sToWrite, 1, "user data"); }
 			else { iChars += 1; }
 	}
 
 	return (iChars);
+}
+/*****************************************************************************/
+void WriteAll (int iFd, const void *pData, size_t zSize, const char *sWhat)
+/*****************************************************************************/
+{
+	const char *pBytes;
+	size_t zDone;
+	ssize_t iWritten;
+
+	pBytes = pData;
+	zDone = 0;
+	while (zDone < zSize)
+	{
+		iWritten = write (iFd, pBytes + zDone, zSize - zDone);
+		if (iWritten == -1)
+		{
+			if (errno == EINTR) { continue; }
+			printf ("[FAILED] Could not write %s: %s!\n", sWhat,
+				strerror (errno));
+			exit (EXIT_ERROR);
+		}
+		if (iWritten == 0)
+		{
+			printf ("[FAILED] Could not write %s!\n", sWhat);
+			exit (EXIT_ERROR);
+		}
+		zDone += (size_t)iWritten;
+	}
+}
+/*****************************************************************************/
+void WriteString (int iFd, const char *sString, const char *sWhat)
+/*****************************************************************************/
+{
+	WriteAll (iFd, sString, strlen (sString), sWhat);
+}
+/*****************************************************************************/
+void CloseFileChecked (int iFd, const char *sWhat)
+/*****************************************************************************/
+{
+	if (close (iFd) == -1)
+	{
+		printf ("[FAILED] Could not close %s: %s!\n", sWhat, strerror (errno));
+		exit (EXIT_ERROR);
+	}
 }
 /*****************************************************************************/
 void WriteCharByChar (int iFd, unsigned char *sString, int iLength)
@@ -25965,7 +26012,7 @@ void WriteCharByChar (int iFd, unsigned char *sString, int iLength)
 	for (iTemp = 0; iTemp < iLength; iTemp++)
 	{
 		snprintf (sToWrite, MAX_TOWRITE, "%c", sString[iTemp]);
-		write (iFd, sToWrite, 1);
+		WriteAll (iFd, sToWrite, 1, "file");
 	}
 }
 /*****************************************************************************/
@@ -26521,42 +26568,70 @@ void CreateBAK (void)
 	FILE *fDAT;
 	FILE *fBAK;
 	int iData;
+	char *sDATName;
+	char *sBAKName;
 
 	switch (iEditPoP)
 	{
-		case 1: fDAT = fopen (LEVELS_DAT, "rb"); break;
-		case 2: fDAT = fopen (PRINCE_DAT, "rb"); break;
-		case 3: fDAT = fopen (sSNESFile, "rb"); break;
+		case 1: sDATName = LEVELS_DAT; sBAKName = LEVELS_BAK; break;
+		case 2: sDATName = PRINCE_DAT; sBAKName = PRINCE_BAK; break;
+		case 3: sDATName = sSNESFile; sBAKName = SNES_BAK; break;
 		default:
 			printf ("[FAILED] Impossible iEditPoP value: %i!\n", iEditPoP);
 			exit (EXIT_ERROR); break;
 	}
+
+	fDAT = fopen (sDATName, "rb");
 	if (fDAT == NULL)
-		{ printf ("[FAILED] Could not open %s: %s!\n",
-			LEVELS_DAT, strerror (errno)); }
-
-	switch (iEditPoP)
 	{
-		case 1: fBAK = fopen (LEVELS_BAK, "wb"); break;
-		case 2: fBAK = fopen (PRINCE_BAK, "wb"); break;
-		case 3: fBAK = fopen (SNES_BAK, "wb"); break;
-		default:
-			printf ("[FAILED] Impossible iEditPoP value: %i!\n", iEditPoP);
-			exit (EXIT_ERROR); break;
+		printf ("[FAILED] Could not open %s: %s!\n", sDATName,
+			strerror (errno));
+		exit (EXIT_ERROR);
 	}
+
+	fBAK = fopen (sBAKName, "wb");
 	if (fBAK == NULL)
-		{ printf ("[FAILED] Could not open %s: %s!\n",
-			LEVELS_BAK, strerror (errno)); }
+	{
+		printf ("[FAILED] Could not open %s: %s!\n", sBAKName,
+			strerror (errno));
+		fclose (fDAT);
+		exit (EXIT_ERROR);
+	}
 
 	while (1)
 	{
 		iData = fgetc (fDAT);
 		if (iData == EOF) { break; }
-			else { putc (iData, fBAK); }
+		else if (putc (iData, fBAK) == EOF)
+		{
+			printf ("[FAILED] Could not write %s: %s!\n", sBAKName,
+				strerror (errno));
+			fclose (fDAT);
+			fclose (fBAK);
+			exit (EXIT_ERROR);
+		}
 	}
 
-	fclose (fDAT);
-	fclose (fBAK);
+	if (ferror (fDAT) != 0)
+	{
+		printf ("[FAILED] Could not read %s: %s!\n", sDATName,
+			strerror (errno));
+		fclose (fDAT);
+		fclose (fBAK);
+		exit (EXIT_ERROR);
+	}
+	if (fclose (fDAT) != 0)
+	{
+		printf ("[FAILED] Could not close %s: %s!\n", sDATName,
+			strerror (errno));
+		exit (EXIT_ERROR);
+	}
+	if (fclose (fBAK) != 0)
+	{
+		printf ("[FAILED] Could not close %s: %s!\n", sBAKName,
+			strerror (errno));
+		exit (EXIT_ERROR);
+	}
 }
 /*****************************************************************************/
 void Help (void)
@@ -32183,24 +32258,24 @@ mkdir (XML_DIR, 0700);
 
 	snprintf (sToWrite, MAX_TOWRITE, "%s",
 		"<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n");
-	write (iFd, sToWrite, strlen (sToWrite));
+	WriteString (iFd, sToWrite, "XML file");
 	DateTime (sDateTime);
 	snprintf (sToWrite, MAX_TOWRITE,
 		"<!-- PoP1 level, exported %s with %s %s. -->\n",
 		sDateTime, EDITOR_NAME, EDITOR_VERSION);
-	write (iFd, sToWrite, strlen (sToWrite));
+	WriteString (iFd, sToWrite, "XML file");
 	snprintf (sToWrite, MAX_TOWRITE, "<level number=\"%lu\">\n",
 		luLevelNr);
-	write (iFd, sToWrite, strlen (sToWrite));
+	WriteString (iFd, sToWrite, "XML file");
 
 	/*** rooms ***/
-	write (iFd, "\t<rooms>\n", 9);
+	WriteAll (iFd, "\t<rooms>\n", 9, "XML file");
 	for (iTemp = 1; iTemp <= iRooms; iTemp++)
 	{
 		snprintf (sToWrite, MAX_TOWRITE,
 			"\t\t<room number=\"%i\">\n",
 			iTemp);
-		write (iFd, sToWrite, strlen (sToWrite));
+		WriteString (iFd, sToWrite, "XML file");
 
 		/*** tiles ***/
 		for (iTile = 0; iTile <= 29; iTile++)
@@ -32208,7 +32283,7 @@ mkdir (XML_DIR, 0700);
 			snprintf (sToWrite, MAX_TOWRITE,
 				"\t\t\t<tile element=\"%i\" modifier=\"%i\" />\n",
 				iThingA[iTemp][iTile], iModifierA[iTemp][iTile][1]);
-			write (iFd, sToWrite, strlen (sToWrite));
+			WriteString (iFd, sToWrite, "XML file");
 		}
 
 		/*** guard ***/
@@ -32230,30 +32305,30 @@ mkdir (XML_DIR, 0700);
 			"\t\t\t<guard location=\"%i\" direction=\"%i\""
 			" skill=\"%i\" colors=\"%i\" />\n",
 			iGuardLocation, iGuardDirection, iGuardSkillS, iGuardColors);
-		write (iFd, sToWrite, strlen (sToWrite));
+		WriteString (iFd, sToWrite, "XML file");
 
 		/*** links ***/
 		snprintf (sToWrite, MAX_TOWRITE,
 			"\t\t\t<links left=\"%i\" right=\"%i\" up=\"%i\" down=\"%i\" />\n",
 			iRoomConnections[iTemp][1], iRoomConnections[iTemp][2],
 			iRoomConnections[iTemp][3], iRoomConnections[iTemp][4]);
-		write (iFd, sToWrite, strlen (sToWrite));
+		WriteString (iFd, sToWrite, "XML file");
 
-		write (iFd, "\t\t</room>\n", 10);
+		WriteAll (iFd, "\t\t</room>\n", 10, "XML file");
 	}
-	write (iFd, "\t</rooms>\n", 10);
+	WriteAll (iFd, "\t</rooms>\n", 10, "XML file");
 
 	/*** events ***/
-	write (iFd, "\t<events>\n", 10);
+	WriteAll (iFd, "\t<events>\n", 10, "XML file");
 	for (iTemp = 0; iTemp < 256; iTemp++)
 	{
 		snprintf (sToWrite, MAX_TOWRITE,
 			"\t\t<event number=\"%i\" room=\"%i\" location=\"%i\" next=\"%i\" />\n",
 			iTemp + 1, EventInfo (iTemp, 1),
 			EventInfo (iTemp, 2), EventInfo (iTemp, 3));
-		write (iFd, sToWrite, strlen (sToWrite));
+		WriteString (iFd, sToWrite, "XML file");
 	}
-	write (iFd, "\t</events>\n", 11);
+	WriteAll (iFd, "\t</events>\n", 11, "XML file");
 
 	/*** prince ***/
 	switch (arKidDir[1])
@@ -32272,12 +32347,12 @@ mkdir (XML_DIR, 0700);
 	snprintf (sToWrite, MAX_TOWRITE,
 		"\t<prince room=\"%i\" location=\"%i\" direction=\"%i\" />\n",
 		arKidRoom[1], arKidPos[1], iKidDir);
-	write (iFd, sToWrite, strlen (sToWrite));
+	WriteString (iFd, sToWrite, "XML file");
 
 	/*** userdata ***/
 	snprintf (sToWrite, MAX_TOWRITE,
 		"\t<userdata fields=\"%lu\">\n", luNumberOfFields);
-	write (iFd, sToWrite, strlen (sToWrite));
+	WriteString (iFd, sToWrite, "XML file");
 	for (iTemp = 1; iTemp <= iInformationNr; iTemp++)
 	{
 		snprintf (sKey, 102, "%s", sInformation[iTemp][0]);
@@ -32294,13 +32369,13 @@ mkdir (XML_DIR, 0700);
 		snprintf (sToWrite, MAX_TOWRITE,
 			"\t\t<field key=\"%s\" value=\"%s\" />\n",
 			sKey, sValue);
-		write (iFd, sToWrite, strlen (sToWrite));
+		WriteString (iFd, sToWrite, "XML file");
 	}
-	write (iFd, "\t</userdata>\n", 13);
+	WriteAll (iFd, "\t</userdata>\n", 13, "XML file");
 
-	write (iFd, "</level>\n", 9);
+	WriteAll (iFd, "</level>\n", 9, "XML file");
 
-	close (iFd);
+	CloseFileChecked (iFd, "XML file");
 }
 /*****************************************************************************/
 void PoP1OrPoP2Action (char *sAction)

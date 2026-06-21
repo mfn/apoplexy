@@ -414,6 +414,7 @@ Uint32 looptime;
 
 int iDebug;
 int iNoAudio;
+int iSDLAudioOpen;
 int iNoChomp;
 int iNoAnim;
 int iNoController;
@@ -2081,6 +2082,7 @@ int InArea (int iUpperLeftX, int iUpperLeftY,
 	int iLowerRightX, int iLowerRightY);
 int InAreaMap (int iUpperLeftX, int iUpperLeftY,
 	int iLowerRightX, int iLowerRightY);
+int MainWindowEventRedraw (SDL_Event event);
 void PreventCPUEating (void);
 void InitScreenAction (char *sAction);
 void InitScreen (void);
@@ -2097,6 +2099,7 @@ int StartGame (void *unused);
 int StartGameS (void *unused);
 int StartGameM (void *unused);
 int UPack (void *unused);
+void CleanupSDL (void);
 void Quit (void);
 void ShowScreen (int iScreenS, SDL_Renderer *screen);
 void Prev (int iCurLevel);
@@ -2377,6 +2380,7 @@ int main (int argc, char *argv[])
 
 	iDebug = 0;
 	iNoAudio = 0;
+	iSDLAudioOpen = 0;
 	iNoChomp = 1;
 	iNoAnim = 0;
 	iNoController = 0;
@@ -11279,13 +11283,45 @@ int InAreaMap (int iUpperLeftX, int iUpperLeftY,
 	}
 }
 /*****************************************************************************/
+int MainWindowEventRedraw (SDL_Event event)
+/*****************************************************************************/
+{
+	if (event.window.windowID != iWindowID) { return (0); }
+
+	switch (event.window.event)
+	{
+		case SDL_WINDOWEVENT_SIZE_CHANGED:
+		case SDL_WINDOWEVENT_RESIZED:
+		case SDL_WINDOWEVENT_EXPOSED:
+			return (1);
+		case SDL_WINDOWEVENT_CLOSE:
+			Quit(); break;
+		case SDL_WINDOWEVENT_FOCUS_GAINED:
+			iActiveWindowID = iWindowID; break;
+	}
+
+	return (0);
+}
+/*****************************************************************************/
 void PreventCPUEating (void)
 /*****************************************************************************/
 {
+	SDL_Event event;
+	Uint32 iElapsed;
+	int iWait;
+
 	gamespeed = REFRESH;
-	while ((SDL_GetTicks() - looptime) < gamespeed)
+	iElapsed = SDL_GetTicks() - looptime;
+	if (iElapsed < gamespeed)
 	{
-		SDL_Delay (10);
+		iWait = gamespeed - iElapsed;
+		if (SDL_WaitEventTimeout (&event, iWait) == 1)
+		{
+			if (SDL_PushEvent (&event) < 0)
+			{
+				printf ("[ WARN ] SDL_PushEvent: %s\n", SDL_GetError());
+			}
+		}
 	}
 	looptime = SDL_GetTicks();
 }
@@ -11850,7 +11886,7 @@ void InitScreen (void)
 		printf ("[FAILED] Unable to init SDL: %s!\n", SDL_GetError());
 		exit (EXIT_ERROR);
 	}
-	atexit (SDL_Quit);
+	atexit (CleanupSDL);
 
 	/*** main window ***/
 	iWindowFlags = SDL_WINDOW_RESIZABLE | iFullscreen;
@@ -11869,6 +11905,11 @@ void InitScreen (void)
 	if (ascreen == NULL)
 	{
 		printf ("[FAILED] Unable to set video mode: %s!\n", SDL_GetError());
+		exit (EXIT_ERROR);
+	}
+	if ((IMG_Init (IMG_INIT_PNG) & IMG_INIT_PNG) != IMG_INIT_PNG)
+	{
+		printf ("[FAILED] Unable to init SDL_image: %s!\n", IMG_GetError());
 		exit (EXIT_ERROR);
 	}
 
@@ -11920,17 +11961,30 @@ void InitScreen (void)
 			exit (EXIT_ERROR);
 		}
 		SDL_PauseAudio (0);
+		iSDLAudioOpen = 1;
 	}
 
 	/*** main window icon ***/
 	snprintf (sImage, MAX_IMG, "%s%s", PNG_VARIOUS, "apoplexy_icon.png");
 	imgicon = IMG_Load (sImage);
-	SDL_SetWindowIcon (window, imgicon);
+	if (imgicon != NULL)
+	{
+		SDL_SetWindowIcon (window, imgicon);
+		SDL_FreeSurface (imgicon);
+	} else {
+		printf ("[ WARN ] IMG_Load (%s): %s\n", sImage, IMG_GetError());
+	}
 
 	/*** Map window icon ***/
 	snprintf (sImage, MAX_IMG, "%s%s", PNG_VARIOUS, "map_icon.png");
 	imgicon = IMG_Load (sImage);
-	SDL_SetWindowIcon (windowmap, imgicon);
+	if (imgicon != NULL)
+	{
+		SDL_SetWindowIcon (windowmap, imgicon);
+		SDL_FreeSurface (imgicon);
+	} else {
+		printf ("[ WARN ] IMG_Load (%s): %s\n", sImage, IMG_GetError());
+	}
 
 	/*** Open the first available controller. ***/
 	iController = 0;
@@ -11954,22 +12008,32 @@ void InitScreen (void)
 					iController = 1;
 
 					/*** Just for fun, use haptic. ***/
-					if (SDL_JoystickIsHaptic (joystick))
+					if ((joystick != NULL) && (SDL_JoystickIsHaptic (joystick)))
 					{
 						haptic = SDL_HapticOpenFromJoystick (joystick);
-						if (SDL_HapticRumbleInit (haptic) == 0)
+						if (haptic == NULL)
 						{
+							printf ("[ WARN ] Could not open the haptic device: %s\n",
+								SDL_GetError());
+						} else if (SDL_HapticRumbleInit (haptic) == 0) {
 							SDL_HapticRumblePlay (haptic, 1.0, 1000);
 						} else {
 							printf ("[ WARN ] Could not initialize the haptic device: %s\n",
 								SDL_GetError());
 						}
 					} else {
-						PrIfDe ("[ INFO ] The game controller is not haptic.\n");
+						if (joystick == NULL)
+						{
+							printf ("[ WARN ] Could not get controller joystick: %s\n",
+								SDL_GetError());
+						} else {
+							PrIfDe ("[ INFO ] The game controller is not haptic.\n");
+						}
 					}
+					break;
 				} else {
 					printf ("[ WARN ] Could not open game controller %i: %s\n",
-						iController, SDL_GetError());
+						iJoyNr, SDL_GetError());
 				}
 			}
 		}
@@ -15060,6 +15124,8 @@ void InitScreen (void)
 
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (0, 50, 25, 430) == 1) /*** left arrow ***/
@@ -15197,6 +15263,8 @@ void InitScreen (void)
 					ShowScreen (iScreen, ascreen);
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iDownAt = 0;
 					iEditLeftOn = 0;
 					iEndLeftOn = 0;
@@ -15776,17 +15844,8 @@ void InitScreen (void)
 					ShowScreen (iScreen, ascreen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_SIZE_CHANGED:
-						case SDL_WINDOWEVENT_RESIZED:
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowScreen (iScreen, ascreen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowScreen (iScreen, ascreen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -15911,6 +15970,7 @@ iFd = open (POP1_DIR BATCH_FILE_NATIVE,
 			printf ("[FAILED] Could not create thread!\n");
 			exit (EXIT_ERROR);
 		}
+		SDL_DetachThread (princethread);
 	}
 
 	if (iEditPoP == 3)
@@ -15923,6 +15983,7 @@ iFd = open (POP1_DIR BATCH_FILE_NATIVE,
 			printf ("[FAILED] Could not create thread!\n");
 			exit (EXIT_ERROR);
 		}
+		SDL_DetachThread (princethread);
 	}
 }
 /*****************************************************************************/
@@ -15977,6 +16038,7 @@ iFd = open (POP1_DIR BATCH_FILE_NATIVE,
 		printf ("[FAILED] Could not create thread!\n");
 		exit (EXIT_ERROR);
 	}
+	SDL_DetachThread (princethread);
 }
 /*****************************************************************************/
 void RunLevelM (int iLevel)
@@ -16037,6 +16099,7 @@ iFd = open (POP1_DIR BATCH_FILE_NATIVE,
 			printf ("[FAILED] Could not create thread!\n");
 			exit (EXIT_ERROR);
 		}
+		SDL_DetachThread (princethread);
 	}
 }
 /*****************************************************************************/
@@ -16284,6 +16347,67 @@ int UPack (void *unused)
 	return (EXIT_NORMAL);
 }
 /*****************************************************************************/
+void CleanupSDL (void)
+/*****************************************************************************/
+{
+	static int iCleanedSDL = 0;
+	int iTemp;
+
+	if (iCleanedSDL == 1) { return; }
+	iCleanedSDL = 1;
+
+	if (iSDLAudioOpen == 1)
+	{
+		SDL_CloseAudio();
+		iSDLAudioOpen = 0;
+	}
+
+	for (iTemp = 0; iTemp < NUM_SOUNDS; iTemp++)
+	{
+		if (sounds[iTemp].data != NULL)
+		{
+			free (sounds[iTemp].data);
+			sounds[iTemp].data = NULL;
+		}
+		sounds[iTemp].dpos = 0;
+		sounds[iTemp].dlen = 0;
+	}
+
+	if (font1 != NULL) { TTF_CloseFont (font1); font1 = NULL; }
+	if (font2 != NULL) { TTF_CloseFont (font2); font2 = NULL; }
+	if (font3 != NULL) { TTF_CloseFont (font3); font3 = NULL; }
+	if (font4 != NULL) { TTF_CloseFont (font4); font4 = NULL; }
+	if (font5 != NULL) { TTF_CloseFont (font5); font5 = NULL; }
+	if (TTF_WasInit() != 0) { TTF_Quit(); }
+	if (IMG_Init (0) != 0) { IMG_Quit(); }
+
+	if (haptic != NULL)
+	{
+		SDL_HapticRumbleStop (haptic);
+		SDL_HapticClose (haptic);
+		haptic = NULL;
+	}
+	if (controller != NULL)
+	{
+		SDL_GameControllerClose (controller);
+		controller = NULL;
+	}
+	joystick = NULL;
+	iController = 0;
+
+	if (curArrow != NULL) { SDL_FreeCursor (curArrow); curArrow = NULL; }
+	if (curWait != NULL) { SDL_FreeCursor (curWait); curWait = NULL; }
+	if (curHand != NULL) { SDL_FreeCursor (curHand); curHand = NULL; }
+	if (curText != NULL) { SDL_FreeCursor (curText); curText = NULL; }
+
+	if (mscreen != NULL) { SDL_DestroyRenderer (mscreen); mscreen = NULL; }
+	if (ascreen != NULL) { SDL_DestroyRenderer (ascreen); ascreen = NULL; }
+	if (windowmap != NULL) { SDL_DestroyWindow (windowmap); windowmap = NULL; }
+	if (window != NULL) { SDL_DestroyWindow (window); window = NULL; }
+
+	if (SDL_WasInit (0) != 0) { SDL_Quit(); }
+}
+/*****************************************************************************/
 void Quit (void)
 /*****************************************************************************/
 {
@@ -16295,13 +16419,7 @@ void Quit (void)
 	{
 		if (iYesNo == 2) { CallSave (0); }
 		if (iModified == 1) { ModifyBack(); }
-		TTF_CloseFont (font1);
-		TTF_CloseFont (font2);
-		TTF_CloseFont (font3);
-		TTF_CloseFont (font4);
-		TTF_CloseFont (font5);
-		TTF_Quit();
-		SDL_Quit();
+		CleanupSDL();
 		exit (EXIT_NORMAL);
 	}
 }
@@ -16330,6 +16448,9 @@ void ShowScreen (int iScreenS, SDL_Renderer *screen)
 
 	/*** Used for looping. ***/
 	int iLoopPlayer;
+
+	SDL_SetRenderDrawColor (screen, 0x00, 0x00, 0x00, SDL_ALPHA_OPAQUE);
+	SDL_RenderClear (screen);
 
 	/*** black background ***/
 	ShowImage (-4, (int[]){1, 0, 0, 0}, screen, 31, 0, 0, 692, 455);
@@ -17109,7 +17230,7 @@ void ShowScreen (int iScreenS, SDL_Renderer *screen)
 		DisplayTextLine (31, 5, sText, font1, color_bl, color_wh, 0);
 	}
 
-	if (iEditPoP != 2) { ShowMap(); }
+	if ((iEditPoP != 2) && (iMapOpen == 1)) { ShowMap(); }
 
 	/*** refresh screen ***/
 	if ((iPlaytest != 1) && (iJumpTo != 1))
@@ -17630,6 +17751,8 @@ void InitPopUp (void)
 					iYPos = event.motion.y;
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (440, 317, 440 + 85, 317 + 32) == 1) /*** OK ***/
@@ -17640,6 +17763,8 @@ void InitPopUp (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iOKOn = 0;
 					if (event.button.button == 1)
 					{
@@ -17650,15 +17775,8 @@ void InitPopUp (void)
 					}
 					ShowPopUp(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowScreen (iScreen, ascreen); ShowPopUp(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowScreen (iScreen, ascreen); ShowPopUp(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -17782,6 +17900,8 @@ int InitPopUpYN (int iYNText)
 					iYPos = event.motion.y;
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (167, 317, 167 + 85, 317 + 32) == 1)
@@ -17797,6 +17917,8 @@ int InitPopUpYN (int iYNText)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iYesOn = 0;
 					iNoOn = 0;
 					if (event.button.button == 1)
@@ -17814,15 +17936,8 @@ int InitPopUpYN (int iYNText)
 					}
 					ShowPopUpYN (iYNText); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowScreen (iScreen, ascreen); ShowPopUpYN (iYNText); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowScreen (iScreen, ascreen); ShowPopUpYN (iYNText); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -17904,7 +18019,20 @@ void DisplayText (int iStartX, int iStartY, int iFontSize,
 		{
 			message = TTF_RenderText_Shaded (font,
 				arText[iTemp], color_bl, color_wh);
+			if (message == NULL)
+			{
+				printf ("[ WARN ] TTF_RenderText_Shaded (%s): %s\n",
+					arText[iTemp], TTF_GetError());
+				continue;
+			}
 			messaget = SDL_CreateTextureFromSurface (ascreen, message);
+			if (messaget == NULL)
+			{
+				printf ("[ WARN ] SDL_CreateTextureFromSurface (%s): %s\n",
+					arText[iTemp], SDL_GetError());
+				SDL_FreeSurface (message);
+				continue;
+			}
 			if ((strcmp (arText[iTemp], "single tile (change or select)") == 0) ||
 				(strcmp (arText[iTemp], "entire room (clear or fill)") == 0) ||
 				(strcmp (arText[iTemp], "entire level (randomize or fill)") == 0))
@@ -17925,25 +18053,36 @@ void DisplayTextLine (int iStartX, int iStartY, char sText[MAX_TEXT + 2],
 	TTF_Font *font, SDL_Color fore, SDL_Color back, int iOnMap)
 /*****************************************************************************/
 {
+	SDL_Renderer *screen;
+
 	if (strcmp (sText, "") == 0)
 	{
 		printf ("[ WARN ] Tried to display an empty text.\n");
 	} else {
+		if (iOnMap == 0) { screen = ascreen; } else { screen = mscreen; }
 		message = TTF_RenderText_Shaded (font, sText, fore, back);
-		if (iOnMap == 0)
+		if (message == NULL)
 		{
-			messaget = SDL_CreateTextureFromSurface (ascreen, message);
-		} else {
-			messaget = SDL_CreateTextureFromSurface (mscreen, message);
+			printf ("[ WARN ] TTF_RenderText_Shaded (%s): %s\n",
+				sText, TTF_GetError());
+			return;
+		}
+		messaget = SDL_CreateTextureFromSurface (screen, message);
+		if (messaget == NULL)
+		{
+			printf ("[ WARN ] SDL_CreateTextureFromSurface (%s): %s\n",
+				sText, SDL_GetError());
+			SDL_FreeSurface (message);
+			return;
 		}
 		offset.x = iStartX;
 		offset.y = iStartY;
 		offset.w = message->w; offset.h = message->h;
 		if (iOnMap == 0)
 		{
-			CustomRenderCopy (messaget, "message", NULL, ascreen, &offset);
+			CustomRenderCopy (messaget, "message", NULL, screen, &offset);
 		} else {
-			CustomRenderCopy (messaget, "map message", NULL, mscreen, &offset);
+			CustomRenderCopy (messaget, "map message", NULL, screen, &offset);
 		}
 		SDL_DestroyTexture (messaget); SDL_FreeSurface (message);
 	}
@@ -19367,6 +19506,8 @@ void ChangePos (int iLocation, SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN: /*** ChangePos ***/
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
 						if (InArea (656, 0, 692, 387) == 1) /*** close ***/
@@ -19429,6 +19570,8 @@ void ChangePos (int iLocation, SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseOn = 0;
 					iBackgroundOn = 0;
 					iTemplatesOn = 0;
@@ -19854,15 +19997,8 @@ void ChangePos (int iLocation, SDL_Renderer *screen)
 					ShowChange (iLocation, ascreen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowChange (iLocation, ascreen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowChange (iLocation, ascreen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -20299,6 +20435,8 @@ int ChangePosCustom (int iLocation, SDL_Renderer *screen)
 					iYPos = event.motion.y;
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (656, 0, 692, 387) == 1) /*** close ***/
@@ -20319,6 +20457,8 @@ int ChangePosCustom (int iLocation, SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseCustomOn = 0;
 					iCustomUseOn = 0;
 					iNativeOn = 0;
@@ -20483,15 +20623,8 @@ int ChangePosCustom (int iLocation, SDL_Renderer *screen)
 					ShowChangeCustom (screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowChangeCustom (screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowChangeCustom (screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -20868,6 +21001,8 @@ void ChangeGuards (SDL_Renderer *screen)
 						{ ShowChangeGuards (screen); }
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (656, 0, 692, 455) == 1) /*** close ***/
@@ -20878,6 +21013,8 @@ void ChangeGuards (SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseGuardsOn = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -21344,15 +21481,8 @@ void ChangeGuards (SDL_Renderer *screen)
 					ShowChangeGuards (screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowChangeGuards (screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowChangeGuards (screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -21640,6 +21770,8 @@ void ChangeMusic (SDL_Renderer *screen)
 					iYPos = event.motion.y;
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (32, 115, 103, 144) == 1) /*** music all ***/
@@ -21667,6 +21799,8 @@ void ChangeMusic (SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseMusicOn = 0;
 					iMAllOn = 0;
 					iMNoneOn = 0;
@@ -21738,15 +21872,8 @@ void ChangeMusic (SDL_Renderer *screen)
 					ShowChangeMusic (screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowChangeMusic (screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowChangeMusic (screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -22045,6 +22172,8 @@ int ChangeBackground (int iLocation, SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						/*** CLOSE ***/
@@ -22056,6 +22185,8 @@ int ChangeBackground (int iLocation, SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseBackgroundOn = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -22106,15 +22237,8 @@ int ChangeBackground (int iLocation, SDL_Renderer *screen)
 					ShowChangeBackground (iLocation, screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowChangeBackground (iLocation, screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowChangeBackground (iLocation, screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -22324,6 +22448,8 @@ int PickTemplate (SDL_Renderer *screen)
 						{ if (iTempHi != 6) { iTempHi = 6; ShowPickTemplate (screen); } }
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						/*** CLOSE ***/
@@ -22335,6 +22461,8 @@ int PickTemplate (SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseTemplateOn = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -22351,15 +22479,8 @@ int PickTemplate (SDL_Renderer *screen)
 					ShowPickTemplate (screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowPickTemplate (screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowPickTemplate (screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -25671,6 +25792,11 @@ void MixAudio (void *unused, Uint8 *stream, int iLen)
 	SDL_memset (stream, 0, iLen); /*** SDL2 ***/
 	for (iTemp = 0; iTemp < NUM_SOUNDS; iTemp++)
 	{
+		if ((sounds[iTemp].data == NULL) ||
+			(sounds[iTemp].dpos >= sounds[iTemp].dlen))
+		{
+			continue;
+		}
 		iAmount = (sounds[iTemp].dlen-sounds[iTemp].dpos);
 		if (iAmount > iLen)
 		{
@@ -25686,43 +25812,66 @@ void PlaySound (char *sFile)
 /*****************************************************************************/
 {
 	int iIndex;
+	int iBuild;
 	SDL_AudioSpec wave;
 	Uint8 *data;
 	Uint32 dlen;
 	SDL_AudioCVT cvt;
 
-	if (iNoAudio == 1) { return; }
-	for (iIndex = 0; iIndex < NUM_SOUNDS; iIndex++)
-	{
-		if (sounds[iIndex].dpos == sounds[iIndex].dlen)
-		{
-			break;
-		}
-	}
-	if (iIndex == NUM_SOUNDS) { return; }
+	if ((iNoAudio == 1) || (iSDLAudioOpen != 1)) { return; }
 
 	if (SDL_LoadWAV (sFile, &wave, &data, &dlen) == NULL)
 	{
 		printf ("[FAILED] Could not load %s: %s!\n", sFile, SDL_GetError());
 		exit (EXIT_ERROR);
 	}
-	SDL_BuildAudioCVT (&cvt, wave.format, wave.channels, wave.freq, AUDIO_S16, 2,
-		44100);
+	iBuild = SDL_BuildAudioCVT (&cvt, wave.format, wave.channels, wave.freq,
+		AUDIO_S16, 2, 44100);
+	if (iBuild < 0)
+	{
+		printf ("[ WARN ] SDL_BuildAudioCVT (%s): %s\n", sFile, SDL_GetError());
+		SDL_FreeWAV (data);
+		return;
+	}
 	/*** The "+ 1" is a workaround for SDL bug #2274. ***/
 	cvt.buf = (Uint8 *)malloc (dlen * (cvt.len_mult + 1));
+	if (cvt.buf == NULL)
+	{
+		printf ("[ WARN ] Could not allocate audio buffer for %s.\n", sFile);
+		SDL_FreeWAV (data);
+		return;
+	}
 	memcpy (cvt.buf, data, dlen);
 	cvt.len = dlen;
-	SDL_ConvertAudio (&cvt);
+	if (SDL_ConvertAudio (&cvt) != 0)
+	{
+		printf ("[ WARN ] SDL_ConvertAudio (%s): %s\n", sFile, SDL_GetError());
+		free (cvt.buf);
+		SDL_FreeWAV (data);
+		return;
+	}
 	SDL_FreeWAV (data);
 
-	if (sounds[iIndex].data)
-	{
-		free (sounds[iIndex].data);
-	}
 	SDL_LockAudio();
-	sounds[iIndex].data = cvt.buf;
-	sounds[iIndex].dlen = cvt.len_cvt;
-	sounds[iIndex].dpos = 0;
+	for (iIndex = 0; iIndex < NUM_SOUNDS; iIndex++)
+	{
+		if (sounds[iIndex].dpos >= sounds[iIndex].dlen)
+		{
+			break;
+		}
+	}
+	if (iIndex != NUM_SOUNDS)
+	{
+		if (sounds[iIndex].data != NULL)
+		{
+			free (sounds[iIndex].data);
+		}
+		sounds[iIndex].data = cvt.buf;
+		sounds[iIndex].dlen = cvt.len_cvt;
+		sounds[iIndex].dpos = 0;
+	} else {
+		free (cvt.buf);
+	}
 	SDL_UnlockAudio();
 }
 /*****************************************************************************/
@@ -26203,6 +26352,8 @@ void Help (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** OK ***/
@@ -26213,6 +26364,8 @@ void Help (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iHelpOK = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -26231,15 +26384,8 @@ void Help (void)
 					}
 					ShowHelp(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowHelp(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowHelp(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -27650,6 +27796,8 @@ void EXE (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -27660,6 +27808,8 @@ void EXE (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iEXESave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -28252,15 +28402,8 @@ void EXE (void)
 					}
 					ShowEXE(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowEXE(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowEXE(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -28822,6 +28965,8 @@ void EXE_F3 (void)
 					UpdateStatusBar_F3_1();
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -28832,6 +28977,8 @@ void EXE_F3 (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iEXESave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -29114,15 +29261,8 @@ void EXE_F3 (void)
 					}
 					ShowEXE_F3(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowEXE_F3(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowEXE_F3(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -29660,6 +29800,8 @@ void EXE_F4 (void)
 					UpdateStatusBar_F4_1();
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -29670,6 +29812,8 @@ void EXE_F4 (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iEXESave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -29819,15 +29963,8 @@ void EXE_F4 (void)
 					}
 					ShowEXE_F4(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowEXE_F4(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowEXE_F4(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -30077,6 +30214,8 @@ void EXE_F5 (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -30087,6 +30226,8 @@ void EXE_F5 (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iEXESave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -30129,15 +30270,8 @@ void EXE_F5 (void)
 					}
 					ShowEXE_F5(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowEXE_F5(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowEXE_F5(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -30426,6 +30560,8 @@ void KidColors (void)
 					iYPos = event.motion.y;
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -30436,6 +30572,8 @@ void KidColors (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iKidColorsSave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -30482,15 +30620,8 @@ void KidColors (void)
 					}
 					ShowKidColors(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowKidColors(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowKidColors(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -32063,6 +32194,8 @@ void PoP1OrPoP2 (void)
 					ShowPoP1OrPoP2 (ascreen);
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if ((iPoP1 == 0) && (InArea (64, 211, 64 + 115, 211 + 32) == 1))
 					{
 						/*** 1 Download ***/
@@ -32082,6 +32215,8 @@ void PoP1OrPoP2 (void)
 					ShowPoP1OrPoP2 (ascreen);
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iOnPoP1 = 0;
 					iOnPoP2 = 0;
 					iOnPoP1SNES = 0;
@@ -32107,15 +32242,8 @@ void PoP1OrPoP2 (void)
 					}
 					ShowPoP1OrPoP2 (ascreen); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowPoP1OrPoP2 (ascreen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowPoP1OrPoP2 (ascreen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -32343,7 +32471,20 @@ void CenterNumber (SDL_Renderer *screen, int iNumber, int iX, int iY,
 		snprintf (sText, MAX_TEXT, "%02X", iNumber);
 	}
 	message = TTF_RenderText_Shaded (font3, sText, fore, back);
+	if (message == NULL)
+	{
+		printf ("[ WARN ] TTF_RenderText_Shaded (%s): %s\n",
+			sText, TTF_GetError());
+		return;
+	}
 	messaget = SDL_CreateTextureFromSurface (screen, message);
+	if (messaget == NULL)
+	{
+		printf ("[ WARN ] SDL_CreateTextureFromSurface (%s): %s\n",
+			sText, SDL_GetError());
+		SDL_FreeSurface (message);
+		return;
+	}
 	if (iHex == 0)
 	{
 		if ((iNumber >= 0) && (iNumber <= 9))
@@ -36748,6 +36889,8 @@ int Native (int iLocation, SDL_Renderer *screen, int iViaCustom)
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN: /*** ChangePos ***/
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
 						/*** tabs ***/
@@ -36772,6 +36915,8 @@ int Native (int iLocation, SDL_Renderer *screen, int iViaCustom)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseNativeOn = 0;
 					iNativeTabOn = 0;
 
@@ -36919,15 +37064,8 @@ int Native (int iLocation, SDL_Renderer *screen, int iViaCustom)
 					ShowNative (screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowNative (screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowNative (screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -37407,6 +37545,9 @@ void MapButtonDown (SDL_Event event)
 	float fLowest;
 	int iTileNr;
 
+	iXPosMap = event.button.x;
+	iYPosMap = event.button.y;
+
 	if (event.button.button == 1)
 	{
 		if (InAreaMap (1189, 809, 1189 + 85, 809 + 32) == 1) /*** Close ***/
@@ -37490,6 +37631,9 @@ void MapButtonDown (SDL_Event event)
 void MapButtonUp (SDL_Event event)
 /*****************************************************************************/
 {
+	iXPosMap = event.button.x;
+	iYPosMap = event.button.y;
+
 	iDownAtMap = 0;
 
 	/*** Used for looping. ***/
@@ -37812,6 +37956,7 @@ void MapShow (void)
 		 */
 		SDL_ShowWindow (windowmap);
 		iMapOpen = 1;
+		ShowMap();
 	}
 	/*** SDL_RaiseWindow (window); ***/
 	PlaySound ("wav/screen2or3.wav");
@@ -37842,6 +37987,9 @@ void ShowMap (void)
 {
 	int iTemp;
 	float fLowest;
+
+	SDL_SetRenderDrawColor (mscreen, 0x00, 0x00, 0x00, SDL_ALPHA_OPAQUE);
+	SDL_RenderClear (mscreen);
 
 	ShowImageBasic (imgmapgrid, MapGridStartX(), MapGridStartY(),
 		"imgmapgrid", mscreen, ZoomGet(), 0);
@@ -38649,6 +38797,8 @@ void Playtest (int iLevel)
 					ShowPlaytest();
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if ((iFoundSDLPoP == 0) &&
 						(InArea (288, 216, 288 + 115, 216 + 32) == 1))
 					{
@@ -38664,6 +38814,8 @@ void Playtest (int iLevel)
 					ShowPlaytest();
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iOnDOSBox = 0;
 					iOnSDLPoP = 0;
 					iOnMININIM = 0;
@@ -38707,15 +38859,8 @@ void Playtest (int iLevel)
 					ShowPlaytest();
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowPlaytest(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowPlaytest(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -39028,6 +39173,8 @@ void Text (void)
 					ShowText();
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -39038,6 +39185,8 @@ void Text (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iTextSave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -39058,15 +39207,8 @@ void Text (void)
 					}
 					ShowText(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowText(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowText(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -39561,6 +39703,8 @@ void Automatic (void)
 					iYPos = event.motion.y;
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Save ***/
@@ -39571,6 +39715,8 @@ void Automatic (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iAutomaticSave = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -39622,15 +39768,8 @@ void Automatic (void)
 					}
 					ShowAutomatic(); break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowAutomatic(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowAutomatic(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -40008,21 +40147,16 @@ void JumpTo (int iType)
 					ShowJumpTo (iType);
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						JumpToAction (iType, "apply");
 					}
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowJumpTo (iType); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowJumpTo (iType); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -40672,6 +40806,8 @@ int Kid (int iLocation, SDL_Renderer *screen)
 
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						/*** CLOSE ***/
@@ -40683,6 +40819,8 @@ int Kid (int iLocation, SDL_Renderer *screen)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseKidOn = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -40786,15 +40924,8 @@ int Kid (int iLocation, SDL_Renderer *screen)
 					ShowKid (screen);
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowKid (screen); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowKid (screen); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;
@@ -41295,6 +41426,7 @@ void HexEditor (void)
 	int iFileSize;
 	int iFdEXE;
 	char cAdd;
+	char *sClipboard;
 	char sTempLine[MAX_DATA + 2];
 
 	/*** Used for looping. ***/
@@ -41486,18 +41618,26 @@ void HexEditor (void)
 							if ((event.key.keysym.mod & KMOD_LCTRL) ||
 								(event.key.keysym.mod & KMOD_RCTRL))
 							{
+								sClipboard = SDL_GetClipboardText();
+								if (sClipboard == NULL)
+								{
+									printf ("[ WARN ] SDL_GetClipboardText: %s\n",
+										SDL_GetError());
+									break;
+								}
 								if ((iTextHover == 1) && (strlen (arTextH[1]) < MAX_TEXT_JUMP))
 								{
 									snprintf (sTempLine, MAX_DATA, "%s", arTextH[1]);
 									snprintf (arTextH[1], MAX_TEXT_JUMP + 1,
-										"%s%s", sTempLine, SDL_GetClipboardText());
+										"%s%s", sTempLine, sClipboard);
 								}
 								if ((iTextHover == 2) && (strlen (arTextH[2]) < MAX_TEXT_FIND))
 								{
 									snprintf (sTempLine, MAX_DATA, "%s", arTextH[2]);
 									snprintf (arTextH[2], MAX_TEXT_FIND + 1,
-										"%s%s", sTempLine, SDL_GetClipboardText());
+										"%s%s", sTempLine, sClipboard);
 								}
+								SDL_free (sClipboard);
 							}
 							break;
 						default: break;
@@ -41522,6 +41662,8 @@ void HexEditor (void)
 					UpdateStatusBar_F12_All();
 					break;
 				case SDL_MOUSEBUTTONDOWN:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					if (event.button.button == 1)
 					{
 						if (InArea (590, 405, 674, 436) == 1) /*** Close ***/
@@ -41532,6 +41674,8 @@ void HexEditor (void)
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
+					iXPos = event.button.x;
+					iYPos = event.button.y;
 					iCloseHexEditorOn = 0;
 					if (event.button.button == 1) /*** left mouse button ***/
 					{
@@ -41637,15 +41781,8 @@ void HexEditor (void)
 					ShowHexEditor();
 					break;
 				case SDL_WINDOWEVENT:
-					switch (event.window.event)
-					{
-						case SDL_WINDOWEVENT_EXPOSED:
-							ShowHexEditor(); break;
-						case SDL_WINDOWEVENT_CLOSE:
-							Quit(); break;
-						case SDL_WINDOWEVENT_FOCUS_GAINED:
-							iActiveWindowID = iWindowID; break;
-					}
+					if (MainWindowEventRedraw (event) == 1)
+						{ ShowHexEditor(); }
 					break;
 				case SDL_QUIT:
 					Quit(); break;

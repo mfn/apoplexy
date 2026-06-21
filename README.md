@@ -554,6 +554,24 @@ Run cppcheck through the same build tree:
 cmake --build build/linux --target cppcheck
 ```
 
+Optional sanitizer build:
+
+```bash
+cmake -S . -B build/sanitizers \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DAPOPLEXY_ENABLE_SANITIZERS=ON
+cmake --build build/sanitizers
+```
+
+This enables AddressSanitizer and UndefinedBehaviorSanitizer on GCC and Clang.
+Use the sanitized binary while testing editing, saving, XML import/export, and
+all supported game modes. On macOS, set `ASAN_OPTIONS=detect_leaks=0` because
+Apple's ASan runtime may abort when leak detection is enabled.
+
+In CLion, create a separate Debug CMake profile and add
+`-DAPOPLEXY_ENABLE_SANITIZERS=ON` to the profile's CMake options. Use a separate
+build directory such as `build/sanitizers`.
+
 The output binaries are `./apoplexy` and `./pr/pr` in the top-level source directory.
 
 ### macOS

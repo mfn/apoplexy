@@ -131,6 +131,10 @@ For the complete release log, see [`CHANGELOG.md`](CHANGELOG.md) and [`docs/Chan
 | Open the built-in hex editor | Press <kbd>F12</kbd>. |
 | Quit | Press <kbd>Q</kbd> or <kbd>Esc</kbd>. |
 
+By default, mouse tile hover uses the rectangular room grid. Start with
+`--pixel-hover` to use experimental pixel-shaped hover that follows the green
+selected-tile overlay.
+
 All actions are intended to be reachable by both mouse and keyboard. Xbox 360 style game controllers are supported for some interactions, but keyboard and mouse are the baseline.
 
 ## Saving, Backups, And Generated Files
@@ -204,6 +208,7 @@ apoplexy [OPTIONS]
 | `-x`, `--xml` | Export PoP1 DOS levels as XML and exit. |
 | `-y`, `--import` | Import PoP1 DOS levels as XML. |
 | `-d`, `--debug` | Also show levels on the console and print extra information. |
+| `--pixel-hover` | Use experimental pixel-perfect room tile hover based on selected-tile overlay masks. |
 | `-n`, `--noaudio` | Mute editor and game audio. |
 | `-q`, `--quiteloud` | Chompers in the editor make noise. |
 | `-i`, `--improved` | Use `improved` as the cheat code. Default is `megahit` or autodetect for PoP1 DOS. |
@@ -248,6 +253,7 @@ Examples:
 
 ```bash
 ./apoplexy --pop1 --level=12 --zoom
+./apoplexy --pop1 --pixel-hover --debug
 ./apoplexy --pop2 --level=20 --noaudio
 ./apoplexy --snes1 --exe=US --fullscreen
 ./apoplexy --author="Ada" --cheat="megahit" --pop1

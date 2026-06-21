@@ -17,6 +17,9 @@ The format is based on Keep a Changelog. Historical release labels such as
   from the pinned PR source submodule.
 - Added cppcheck static analysis with a baseline suppression for the current
   intentional background-rendering branch.
+- Added an experimental `--pixel-hover` option that uses selected-tile overlay
+  masks for pixel-perfect room tile hover, with masks generated on demand and
+  cached with LRU eviction.
 
 ### Changed
 - Moved the remote update check after command-line handling so commands like

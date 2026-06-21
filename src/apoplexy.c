@@ -543,6 +543,7 @@ int iMovingNewBusy;
 int iChangingBrokenRoom;
 int iChangingBrokenSide;
 int iScale;
+int iPixelHover;
 int iZoom; /*** For the big area on the Map window. ***/
 int iFullscreen;
 int iChangeForeRand;
@@ -580,6 +581,45 @@ int iRooms;
 int iRoomLinks;
 int iTileW;
 int iTileH;
+
+/* Pixel-perfect hover: selected texture paths are registered during preload;
+ * CPU masks are generated lazily and retained in an LRU cache. */
+#define HOVER_MASK_CAP_DEFAULT 128
+typedef struct {
+	SDL_Texture *imgKey;
+	char *sPath;
+} HoverPathEntry;
+HoverPathEntry *arHoverPath;
+int iHoverPathCount;
+int iHoverPathCap;
+
+typedef struct {
+	SDL_Texture *imgKey;       /* sel-overlay texture pointer */
+	unsigned char *arMask;     /* [iW * iH], 1 = opaque */
+	int iW;
+	int iH;
+	unsigned int iLastUsed;
+} HoverMaskEntry;
+HoverMaskEntry *arHoverMask;
+int iHoverMaskCount;
+int iHoverMaskCap;
+int iHoverMaskBuildCount;
+int iHoverMaskEvictCount;
+int iHoverMaskFail;
+unsigned int iHoverMaskTick;
+int iHoverDebugLastX = -1;
+int iHoverDebugLastY = -1;
+int iHoverDebugLastHit = -1;
+int iHoverDebugLastSelected = -1;
+
+/* Per-location cache updated by ShowPos* each frame. */
+typedef struct {
+	int iActive;           /* 1 if slot was written this frame */
+	SDL_Rect dest;         /* screen destination (unscaled) */
+	SDL_Texture *imgSel;   /* sel-overlay texture key */
+} HoverSlot;
+HoverSlot arHoverSlot[30 + 2]; /* index 1..30 */
+
 int iPosShown;
 int iPreLoaded;
 int iNrToPreLoad;
@@ -2079,6 +2119,18 @@ void CmpPrep (char *sBlock, char *sCompare, SDL_Texture **imgcmp,
 	SDL_Texture **imgshow);
 int InArea (int iUpperLeftX, int iUpperLeftY,
 	int iLowerRightX, int iLowerRightY);
+void HoverPathRegister (SDL_Texture *imgKey, char *sPath);
+void HoverPathRegisterImage (SDL_Texture *imgKey, char *sPath, char *sPNG);
+char *HoverPathFind (SDL_Texture *imgKey);
+HoverMaskEntry *HoverMaskGet (SDL_Texture *imgKey);
+void HoverMaskBuild (char *sPath, unsigned char **arMaskOut,
+	int *iWOut, int *iHOut);
+int HoverMaskEvictSlot (void);
+void HoverFree (void);
+void HoverSlotStore (SDL_Rect dest, int iLocation, SDL_Texture *imgSel);
+int HoverRowAtMouse (void);
+int HoverTileAtMouseLegacy (void);
+int HoverTileAtMouse (void);
 int InAreaMap (int iUpperLeftX, int iUpperLeftY,
 	int iLowerRightX, int iLowerRightY);
 void PreventCPUEating (void);
@@ -2381,6 +2433,7 @@ int main (int argc, char *argv[])
 	iNoAnim = 0;
 	iNoController = 0;
 	iNoSave = 0;
+	iPixelHover = 0;
 	snprintf (sAuthor, MAX_OPTION, "%s user", EDITOR_NAME);
 	snprintf (sCheat1, MAX_OPTION, "%s", "megahit");
 	snprintf (sCheat2, MAX_OPTION, "%s", "yippeeyahoo");
@@ -2468,6 +2521,10 @@ int main (int argc, char *argv[])
 				(strcmp (argv[iTemp], "--debug") == 0))
 			{
 				iDebug = 1;
+			}
+			else if (strcmp (argv[iTemp], "--pixel-hover") == 0)
+			{
+				iPixelHover = 1;
 			}
 			else if ((strcmp (argv[iTemp], "-n") == 0) ||
 				(strcmp (argv[iTemp], "--noaudio") == 0))
@@ -9188,6 +9245,8 @@ void ShowImage (int iThingOrRoom, int iModifier[], SDL_Renderer *screen,
 							}
 						}
 						iPosShown = 1;
+						if (cCurType == 'd') { HoverSlotStore (dest, iLocation, imgd18_0[2]); }
+						else { HoverSlotStore (dest, iLocation, imgp18_0[2]); }
 					} else {
 						ShowPos (loc, dest, iLocation, imgd18_0, imgp18_0, "");
 					}
@@ -9227,6 +9286,8 @@ void ShowImage (int iThingOrRoom, int iModifier[], SDL_Renderer *screen,
 							}
 						}
 						iPosShown = 1;
+						if (cCurType == 'd') { HoverSlotStore (dest, iLocation, imgd19_0[2]); }
+						else { HoverSlotStore (dest, iLocation, imgp19_0[2]); }
 					} else {
 						ShowPos (loc, dest, iLocation, imgd19_0, imgp19_0, "");
 					}
@@ -9266,6 +9327,8 @@ void ShowImage (int iThingOrRoom, int iModifier[], SDL_Renderer *screen,
 							}
 						}
 						iPosShown = 1;
+						if (cCurType == 'd') { HoverSlotStore (dest, iLocation, imgd22_0[2]); }
+						else { HoverSlotStore (dest, iLocation, imgp22_0[2]); }
 					} else {
 						ShowPos (loc, dest, iLocation, imgd22_0, imgp22_0, "");
 					}
@@ -9325,6 +9388,8 @@ void ShowImage (int iThingOrRoom, int iModifier[], SDL_Renderer *screen,
 							}
 						}
 						iPosShown = 1;
+						if (cCurType == 'd') { HoverSlotStore (dest, iLocation, imgd30_0[2]); }
+						else { HoverSlotStore (dest, iLocation, imgp30_0[2]); }
 					} else {
 						ShowPos (loc, dest, iLocation, imgd30_0, imgp30_0, "");
 					}
@@ -9405,6 +9470,8 @@ void ShowImage (int iThingOrRoom, int iModifier[], SDL_Renderer *screen,
 							}
 						}
 						iPosShown = 1;
+						if (cCurType == 'd') { HoverSlotStore (dest, iLocation, imgd19[2]); }
+						else { HoverSlotStore (dest, iLocation, imgp19[2]); }
 					} else {
 						ShowPos (loc, dest, iLocation, imgd19, imgp19, "SDLPoP");
 						ShowImageBasic (six_bit_rgb[(iModifier[0] & 0x3F)], dest.x + 90,
@@ -9440,6 +9507,8 @@ void ShowImage (int iThingOrRoom, int iModifier[], SDL_Renderer *screen,
 							}
 						}
 						iPosShown = 1;
+						if (cCurType == 'd') { HoverSlotStore (dest, iLocation, imgd30[2]); }
+						else { HoverSlotStore (dest, iLocation, imgp30[2]); }
 					} else {
 						ShowPos (loc, dest, iLocation, imgd30, imgp30, "SDLPoP");
 						ShowImageBasic (six_bit_rgb[(iModifier[0] & 0x3F)], dest.x + 90,
@@ -9745,6 +9814,7 @@ void ShowImage (int iThingOrRoom, int iModifier[], SDL_Renderer *screen,
 									screen, &dest);
 							}
 							iPosShown = 1;
+							HoverSlotStore (dest, iLocation, imgc19[2]);
 						} else {
 							ShowPosPoP2 (loc, dest, iLocation, imgc19, "");
 						}
@@ -9813,6 +9883,7 @@ void ShowImage (int iThingOrRoom, int iModifier[], SDL_Renderer *screen,
 									screen, &dest);
 							}
 							iPosShown = 1;
+							HoverSlotStore (dest, iLocation, imgc32[2]);
 						} else {
 							ShowPosPoP2 (loc, dest, iLocation, imgc32, "");
 						}
@@ -10344,6 +10415,7 @@ void ShowImage (int iThingOrRoom, int iModifier[], SDL_Renderer *screen,
 									screen, &dest);
 							}
 							iPosShown = 1;
+							HoverSlotStore (dest, iLocation, imgt19[2]);
 						} else {
 							ShowPosPoP2 (loc, dest, iLocation, imgt19, "");
 						}
@@ -10376,6 +10448,7 @@ void ShowImage (int iThingOrRoom, int iModifier[], SDL_Renderer *screen,
 									screen, &dest);
 							}
 							iPosShown = 1;
+							HoverSlotStore (dest, iLocation, imgt32[2]);
 						} else {
 							ShowPosPoP2 (loc, dest, iLocation, imgt32, "");
 						}
@@ -11247,6 +11320,511 @@ void CmpPrep (char *sBlock, char *sCompare, SDL_Texture **imgcmp,
 		imgshow[1] = imgcmp[1];
 		imgshow[2] = imgcmp[2];
 	}
+}
+/*****************************************************************************/
+void HoverPathRegister (SDL_Texture *imgKey, char *sPath)
+/*****************************************************************************/
+{
+	char *sCopy;
+	int iPath;
+	int iLen;
+	int iNewCap;
+	HoverPathEntry *arNew;
+
+	if (imgKey == NULL) { return; }
+	for (iPath = 0; iPath < iHoverPathCount; iPath++)
+	{
+		if (arHoverPath[iPath].imgKey == imgKey) { return; }
+	}
+	if (iHoverPathCount >= iHoverPathCap)
+	{
+		iNewCap = iHoverPathCap * 2;
+		if (iNewCap == 0) { iNewCap = 256; }
+		arNew = (HoverPathEntry *)realloc (arHoverPath,
+			iNewCap * (int)sizeof (HoverPathEntry));
+		if (arNew == NULL)
+		{
+			printf ("[FAILED] Could not grow hover path registry!\n");
+			exit (EXIT_ERROR);
+		}
+		arHoverPath = arNew;
+		iHoverPathCap = iNewCap;
+	}
+	iLen = (int)strlen (sPath) + 1;
+	sCopy = (char *)malloc (iLen);
+	if (sCopy == NULL)
+	{
+		printf ("[FAILED] Could not store hover path!\n");
+		exit (EXIT_ERROR);
+	}
+	snprintf (sCopy, iLen, "%s", sPath);
+	arHoverPath[iHoverPathCount].imgKey = imgKey;
+	arHoverPath[iHoverPathCount].sPath = sCopy;
+	iHoverPathCount++;
+	if ((iDebug == 1) && ((iHoverPathCount <= 5) ||
+		((iHoverPathCount % 250) == 0)))
+	{
+		printf ("[DEBUG] hover path registered: %i %s\n",
+			iHoverPathCount, sPath);
+	}
+}
+/*****************************************************************************/
+void HoverPathRegisterImage (SDL_Texture *imgKey, char *sPath, char *sPNG)
+/*****************************************************************************/
+{
+	char sImage[MAX_IMG + 2];
+
+	snprintf (sImage, MAX_IMG, "%s%s", sPath, sPNG);
+	HoverPathRegister (imgKey, sImage);
+}
+/*****************************************************************************/
+char *HoverPathFind (SDL_Texture *imgKey)
+/*****************************************************************************/
+{
+	int iPath;
+
+	for (iPath = 0; iPath < iHoverPathCount; iPath++)
+	{
+		if (arHoverPath[iPath].imgKey == imgKey)
+			{ return (arHoverPath[iPath].sPath); }
+	}
+	return (NULL);
+}
+/*****************************************************************************/
+HoverMaskEntry *HoverMaskGet (SDL_Texture *imgKey)
+/*****************************************************************************/
+{
+	unsigned char *arMask;
+	char *sPath;
+	int iMask;
+	int iSlot;
+	int iW;
+	int iH;
+
+	if (imgKey == NULL) { return (NULL); }
+	if (arHoverMask == NULL)
+	{
+		iHoverMaskCap = HOVER_MASK_CAP_DEFAULT;
+		arHoverMask = (HoverMaskEntry *)calloc (iHoverMaskCap,
+			(int)sizeof (HoverMaskEntry));
+		if (arHoverMask == NULL)
+		{
+			printf ("[FAILED] Could not allocate hover mask cache!\n");
+			exit (EXIT_ERROR);
+		}
+	}
+	iHoverMaskTick++;
+	if (iHoverMaskTick == 0) { iHoverMaskTick = 1; }
+	for (iMask = 0; iMask < iHoverMaskCount; iMask++)
+	{
+		if (arHoverMask[iMask].imgKey == imgKey)
+		{
+			arHoverMask[iMask].iLastUsed = iHoverMaskTick;
+			return (&arHoverMask[iMask]);
+		}
+	}
+	sPath = HoverPathFind (imgKey);
+	if (sPath == NULL)
+	{
+		printf ("[FAILED] Missing hover mask path for selected texture!\n");
+		exit (EXIT_ERROR);
+	}
+	HoverMaskBuild (sPath, &arMask, &iW, &iH);
+	iSlot = HoverMaskEvictSlot();
+	arHoverMask[iSlot].imgKey = imgKey;
+	arHoverMask[iSlot].arMask = arMask;
+	arHoverMask[iSlot].iW = iW;
+	arHoverMask[iSlot].iH = iH;
+	arHoverMask[iSlot].iLastUsed = iHoverMaskTick;
+	iHoverMaskBuildCount++;
+	if (iDebug == 1)
+	{
+		printf ("[DEBUG] hover mask generated: slot=%i cache=%i built=%i "
+			"evicted=%i %s\n", iSlot, iHoverMaskCount,
+			iHoverMaskBuildCount, iHoverMaskEvictCount, sPath);
+	}
+	return (&arHoverMask[iSlot]);
+}
+/*****************************************************************************/
+void HoverMaskBuild (char *sPath, unsigned char **arMaskOut,
+	int *iWOut, int *iHOut)
+/*****************************************************************************/
+{
+	SDL_Surface *surfSel;
+	SDL_Surface *convSel;
+	unsigned char *arMask;
+	unsigned char *arGreen;
+	unsigned char *arOutside;
+	int *arQueue;
+	int iX;
+	int iY;
+	int iDX2;
+	int iDY2;
+	int iPix;
+	int iPos;
+	int iHead;
+	int iTail;
+	int iNX;
+	int iNY;
+	int iW;
+	int iH;
+	Uint8 iR, iG, iB, iA;
+
+	surfSel = IMG_Load (sPath);
+	if (surfSel == NULL)
+	{
+		printf ("[FAILED] IMG_Load hover mask: %s (%s)\n",
+			sPath, IMG_GetError());
+		exit (EXIT_ERROR);
+	}
+	convSel = SDL_ConvertSurfaceFormat (surfSel, SDL_PIXELFORMAT_RGBA32, 0);
+	SDL_FreeSurface (surfSel);
+	if (convSel == NULL)
+	{
+		printf ("[FAILED] Could not convert hover mask surface: %s\n", sPath);
+		exit (EXIT_ERROR);
+	}
+	iW = convSel->w;
+	iH = convSel->h;
+	arMask = (unsigned char *)calloc (iW * iH, 1);
+	arGreen = (unsigned char *)calloc (iW * iH, 1);
+	arOutside = (unsigned char *)calloc (iW * iH, 1);
+	arQueue = (int *)malloc (iW * iH * (int)sizeof (int));
+	if ((arMask == NULL) || (arGreen == NULL) ||
+		(arOutside == NULL) || (arQueue == NULL))
+	{
+		printf ("[FAILED] Could not allocate hover mask buffers!\n");
+		free (arMask);
+		free (arGreen);
+		free (arOutside);
+		free (arQueue);
+		SDL_FreeSurface (convSel);
+		exit (EXIT_ERROR);
+	}
+	if (SDL_LockSurface (convSel) != 0)
+	{
+		printf ("[FAILED] Could not lock hover mask surface: %s\n", sPath);
+		free (arMask);
+		free (arGreen);
+		free (arOutside);
+		free (arQueue);
+		SDL_FreeSurface (convSel);
+		exit (EXIT_ERROR);
+	}
+
+	/*** Select only the actual green overlay pixels. ***/
+	for (iY = 0; iY < iH; iY++)
+	{
+		for (iX = 0; iX < iW; iX++)
+		{
+			iPix = iY * (convSel->pitch / 4) + iX;
+			SDL_GetRGBA (((Uint32 *)convSel->pixels)[iPix],
+				convSel->format, &iR, &iG, &iB, &iA);
+			if ((iA > 10) && (iG > 120) &&
+				((int)iG > (int)iR + 40) &&
+				((int)iG > (int)iB + 40))
+			{
+				arGreen[iY * iW + iX] = 1;
+			}
+		}
+	}
+
+	/*** Dilation closes diagonal hatch gaps before flood filling. ***/
+	for (iY = 0; iY < iH; iY++)
+	{
+		for (iX = 0; iX < iW; iX++)
+		{
+			if (arGreen[iY * iW + iX] == 0) { continue; }
+			for (iDY2 = -3; iDY2 <= 3; iDY2++)
+			{
+				for (iDX2 = -3; iDX2 <= 3; iDX2++)
+				{
+					if ((iX + iDX2 < 0) || (iX + iDX2 >= iW)) { continue; }
+					if ((iY + iDY2 < 0) || (iY + iDY2 >= iH)) { continue; }
+					arMask[(iY + iDY2) * iW + iX + iDX2] = 1;
+				}
+			}
+		}
+	}
+
+	/*** Flood fill non-mask pixels from the image border. ***/
+	iHead = 0;
+	iTail = 0;
+	for (iY = 0; iY < iH; iY++)
+	{
+		for (iX = 0; iX < iW; iX++)
+		{
+			if ((iX != 0) && (iX != iW - 1) &&
+				(iY != 0) && (iY != iH - 1)) { continue; }
+			iPos = iY * iW + iX;
+			if ((arMask[iPos] != 0) || (arOutside[iPos] != 0)) { continue; }
+			arOutside[iPos] = 1;
+			arQueue[iTail++] = iPos;
+		}
+	}
+	while (iHead < iTail)
+	{
+		iPos = arQueue[iHead++];
+		iX = iPos % iW;
+		iY = iPos / iW;
+		for (iDY2 = -1; iDY2 <= 1; iDY2++)
+		{
+			for (iDX2 = -1; iDX2 <= 1; iDX2++)
+			{
+				if ((iDX2 != 0) && (iDY2 != 0)) { continue; }
+				if ((iDX2 == 0) && (iDY2 == 0)) { continue; }
+				iNX = iX + iDX2;
+				iNY = iY + iDY2;
+				if ((iNX < 0) || (iNX >= iW)) { continue; }
+				if ((iNY < 0) || (iNY >= iH)) { continue; }
+				iPix = iNY * iW + iNX;
+				if ((arMask[iPix] != 0) || (arOutside[iPix] != 0)) { continue; }
+				arOutside[iPix] = 1;
+				arQueue[iTail++] = iPix;
+			}
+		}
+	}
+
+	/*** Anything enclosed by the green overlay is part of the hover shape. ***/
+	for (iY = 0; iY < iH; iY++)
+	{
+		for (iX = 0; iX < iW; iX++)
+		{
+			iPix = iY * iW + iX;
+			if (arOutside[iPix] == 0) { arMask[iPix] = 1; }
+			if (arGreen[iPix] != 0)
+			{
+				for (iDY2 = -2; iDY2 <= 2; iDY2++)
+				{
+					for (iDX2 = -2; iDX2 <= 2; iDX2++)
+					{
+						if ((iX + iDX2 < 0) || (iX + iDX2 >= iW)) { continue; }
+						if ((iY + iDY2 < 0) || (iY + iDY2 >= iH)) { continue; }
+						arMask[(iY + iDY2) * iW + iX + iDX2] = 1;
+					}
+				}
+			}
+		}
+	}
+	SDL_UnlockSurface (convSel);
+	SDL_FreeSurface (convSel);
+	free (arGreen);
+	free (arOutside);
+	free (arQueue);
+	*arMaskOut = arMask;
+	*iWOut = iW;
+	*iHOut = iH;
+}
+/*****************************************************************************/
+int HoverMaskEvictSlot (void)
+/*****************************************************************************/
+{
+	unsigned int iOldest;
+	int iMask;
+	int iOldestSlot;
+
+	if (iHoverMaskCount < iHoverMaskCap)
+	{
+		iHoverMaskCount++;
+		return (iHoverMaskCount - 1);
+	}
+	iOldestSlot = 0;
+	iOldest = arHoverMask[0].iLastUsed;
+	for (iMask = 1; iMask < iHoverMaskCount; iMask++)
+	{
+		if (arHoverMask[iMask].iLastUsed < iOldest)
+		{
+			iOldest = arHoverMask[iMask].iLastUsed;
+			iOldestSlot = iMask;
+		}
+	}
+	if (iDebug == 1)
+	{
+		printf ("[DEBUG] hover mask evict: slot=%i cache=%i built=%i\n",
+			iOldestSlot, iHoverMaskCount, iHoverMaskBuildCount);
+	}
+	free (arHoverMask[iOldestSlot].arMask);
+	arHoverMask[iOldestSlot].arMask = NULL;
+	iHoverMaskEvictCount++;
+	return (iOldestSlot);
+}
+/*****************************************************************************/
+void HoverFree (void)
+/*****************************************************************************/
+{
+	int iPath;
+	int iMask;
+
+	for (iMask = 0; iMask < iHoverMaskCount; iMask++)
+		{ free (arHoverMask[iMask].arMask); }
+	free (arHoverMask);
+	arHoverMask = NULL;
+	iHoverMaskCount = 0;
+	iHoverMaskCap = 0;
+	for (iPath = 0; iPath < iHoverPathCount; iPath++)
+		{ free (arHoverPath[iPath].sPath); }
+	free (arHoverPath);
+	arHoverPath = NULL;
+	iHoverPathCount = 0;
+	iHoverPathCap = 0;
+}
+/*****************************************************************************/
+int HoverRowAtMouse (void)
+/*****************************************************************************/
+{
+	int iYUnscaled;
+
+	iYUnscaled = iYPos / iScale;
+	if ((iYUnscaled >= iVer1 + iTTP1) &&
+		(iYUnscaled <= iVer2 + iTTPO)) { return (1); }
+	if ((iYUnscaled >= iVer2 + iTTPO) &&
+		(iYUnscaled <= iVer3 + iTTPO)) { return (2); }
+	if ((iYUnscaled >= iVer3 + iTTPO) &&
+		(iYUnscaled <= iVer3 + iDY + iTTPO)) { return (3); }
+	return (0);
+}
+/*****************************************************************************/
+int HoverTileAtMouseLegacy (void)
+/*****************************************************************************/
+{
+	/*** User hovers over tiles in the upper row. ***/
+	if (InArea (iHor1, iVer1 + iTTP1, iHor2, iVer2 + iTTPO) == 1)
+		{ return (1); }
+	else if (InArea (iHor2, iVer1 + iTTP1, iHor3, iVer2 + iTTPO) == 1)
+		{ return (2); }
+	else if (InArea (iHor3, iVer1 + iTTP1, iHor4, iVer2 + iTTPO) == 1)
+		{ return (3); }
+	else if (InArea (iHor4, iVer1 + iTTP1, iHor5, iVer2 + iTTPO) == 1)
+		{ return (4); }
+	else if (InArea (iHor5, iVer1 + iTTP1, iHor6, iVer2 + iTTPO) == 1)
+		{ return (5); }
+	else if (InArea (iHor6, iVer1 + iTTP1, iHor7, iVer2 + iTTPO) == 1)
+		{ return (6); }
+	else if (InArea (iHor7, iVer1 + iTTP1, iHor8, iVer2 + iTTPO) == 1)
+		{ return (7); }
+	else if (InArea (iHor8, iVer1 + iTTP1, iHor9, iVer2 + iTTPO) == 1)
+		{ return (8); }
+	else if (InArea (iHor9, iVer1 + iTTP1, iHor10, iVer2 + iTTPO) == 1)
+		{ return (9); }
+	else if (InArea (iHor10, iVer1 + iTTP1, iHor10 + iDX,
+		iVer2 + iTTPO) == 1)
+		{ return (10); }
+
+	/*** User hovers over tiles in the middle row. ***/
+	else if (InArea (iHor1, iVer2 + iTTPO, iHor2, iVer3 + iTTPO) == 1)
+		{ return (11); }
+	else if (InArea (iHor2, iVer2 + iTTPO, iHor3, iVer3 + iTTPO) == 1)
+		{ return (12); }
+	else if (InArea (iHor3, iVer2 + iTTPO, iHor4, iVer3 + iTTPO) == 1)
+		{ return (13); }
+	else if (InArea (iHor4, iVer2 + iTTPO, iHor5, iVer3 + iTTPO) == 1)
+		{ return (14); }
+	else if (InArea (iHor5, iVer2 + iTTPO, iHor6, iVer3 + iTTPO) == 1)
+		{ return (15); }
+	else if (InArea (iHor6, iVer2 + iTTPO, iHor7, iVer3 + iTTPO) == 1)
+		{ return (16); }
+	else if (InArea (iHor7, iVer2 + iTTPO, iHor8, iVer3 + iTTPO) == 1)
+		{ return (17); }
+	else if (InArea (iHor8, iVer2 + iTTPO, iHor9, iVer3 + iTTPO) == 1)
+		{ return (18); }
+	else if (InArea (iHor9, iVer2 + iTTPO, iHor10, iVer3 + iTTPO) == 1)
+		{ return (19); }
+	else if (InArea (iHor10, iVer2 + iTTPO, iHor10 + iDX,
+		iVer3 + iTTPO) == 1)
+		{ return (20); }
+
+	/*** User hovers over tiles in the bottom row. ***/
+	else if (InArea (iHor1, iVer3 + iTTPO, iHor2,
+		iVer3 + iDY + iTTPO) == 1)
+		{ return (21); }
+	else if (InArea (iHor2, iVer3 + iTTPO, iHor3,
+		iVer3 + iDY + iTTPO) == 1)
+		{ return (22); }
+	else if (InArea (iHor3, iVer3 + iTTPO, iHor4,
+		iVer3 + iDY + iTTPO) == 1)
+		{ return (23); }
+	else if (InArea (iHor4, iVer3 + iTTPO, iHor5,
+		iVer3 + iDY + iTTPO) == 1)
+		{ return (24); }
+	else if (InArea (iHor5, iVer3 + iTTPO, iHor6,
+		iVer3 + iDY + iTTPO) == 1)
+		{ return (25); }
+	else if (InArea (iHor6, iVer3 + iTTPO, iHor7,
+		iVer3 + iDY + iTTPO) == 1)
+		{ return (26); }
+	else if (InArea (iHor7, iVer3 + iTTPO, iHor8,
+		iVer3 + iDY + iTTPO) == 1)
+		{ return (27); }
+	else if (InArea (iHor8, iVer3 + iTTPO, iHor9,
+		iVer3 + iDY + iTTPO) == 1)
+		{ return (28); }
+	else if (InArea (iHor9, iVer3 + iTTPO, iHor10,
+		iVer3 + iDY + iTTPO) == 1)
+		{ return (29); }
+	else if (InArea (iHor10, iVer3 + iTTPO, iHor10 + iDX,
+		iVer3 + iDY + iTTPO) == 1)
+		{ return (30); }
+	return (0);
+}
+/*****************************************************************************/
+int HoverTileAtMouse (void)
+/*****************************************************************************/
+{
+	/* Test tiles in reverse draw order (front-to-back) against the sel-overlay
+	 * alpha mask. Returns the matching iLocation (1..30) or 0 if none. */
+
+	/* Draw order: bottom row first (iLoc 21..30), then middle (11..20), then
+	 * top (1..10), each left-to-right. Front-to-back reversal: 10..1,
+	 * 20..11, 30..21. */
+
+	int aiOrder[30];
+	int iI;
+	int iLoc;
+	int iRow;
+	int iMX;
+	int iMY;
+	int iW;
+	int iH;
+	SDL_Texture *imgSel;
+	unsigned char *arMask;
+	HoverMaskEntry *maskEntry;
+	SDL_Rect dest;
+
+	iRow = HoverRowAtMouse();
+	if (iRow == 0) { return (0); }
+
+	for (iI = 0; iI < 10; iI++) { aiOrder[iI]      = 10 - iI; }
+	for (iI = 0; iI < 10; iI++) { aiOrder[10 + iI]  = 20 - iI; }
+	for (iI = 0; iI < 10; iI++) { aiOrder[20 + iI]  = 30 - iI; }
+
+	for (iI = 0; iI < 30; iI++)
+	{
+		iLoc = aiOrder[iI];
+		if ((iRow == 1) && ((iLoc < 1) || (iLoc > 10))) { continue; }
+		if ((iRow == 2) && ((iLoc < 11) || (iLoc > 20))) { continue; }
+		if ((iRow == 3) && ((iLoc < 21) || (iLoc > 30))) { continue; }
+		if (arHoverSlot[iLoc].iActive == 0) { continue; }
+
+		imgSel = arHoverSlot[iLoc].imgSel;
+		if (imgSel == NULL) { continue; }
+		maskEntry = HoverMaskGet (imgSel);
+		if (maskEntry == NULL) { continue; }
+		arMask = maskEntry->arMask;
+		iW = maskEntry->iW;
+		iH = maskEntry->iH;
+
+		dest = arHoverSlot[iLoc].dest;
+		/* Convert raw screen pixel to unscaled tile-image coords. */
+		iMX = (iXPos / iScale) - dest.x;
+		iMY = (iYPos / iScale) - dest.y;
+
+		if ((iMX < 0) || (iMX >= iW)) { continue; }
+		if ((iMY < 0) || (iMY >= iH)) { continue; }
+		if (arMask[iMY * iW + iMX] == 0) { continue; }
+
+		return (iLoc);
+	}
+	return (0);
 }
 /*****************************************************************************/
 int InArea (int iUpperLeftX, int iUpperLeftY,
@@ -12264,6 +12842,8 @@ void InitScreen (void)
 		PreLoad (PNG_PALACE, "p_sel_22_0_sprite.png", &spriteswordpsel);
 		PreLoad (PNG_PALACE, "p_26_0_with_lattice.png", &imgp26_0_wl[1]);
 		PreLoad (PNG_PALACE, "p_sel_26_0.png", &imgp26_0_wl[2]);
+		if (iPixelHover == 1)
+			{ HoverPathRegisterImage (imgp26_0_wl[2], PNG_PALACE, "p_sel_26_0.png"); }
 
 		/*** native ***/
 		PreLoadSet (PNG_PALACE, 'p', "0_4", imgp0_4);
@@ -12734,14 +13314,22 @@ void InitScreen (void)
 		case 1:
 			PreLoad (PNG_VARIOUS, "unknown.png", &imgunk[1]);
 			PreLoad (PNG_VARIOUS, "sel_unknown.png", &imgunk[2]);
+			if (iPixelHover == 1)
+				{ HoverPathRegisterImage (imgunk[2], PNG_VARIOUS, "sel_unknown.png"); }
 			break;
 		case 2:
 			PreLoad (PNG_VARIOUS, "unknown_pop2.png", &imgunk[1]);
 			PreLoad (PNG_VARIOUS, "sel_unknown_pop2.png", &imgunk[2]);
+			if (iPixelHover == 1)
+				{ HoverPathRegisterImage (imgunk[2], PNG_VARIOUS,
+					"sel_unknown_pop2.png"); }
 			break;
 		case 3:
 			PreLoad (PNG_VARIOUS, "unknown_snes.png", &imgunk[1]);
 			PreLoad (PNG_VARIOUS, "sel_unknown_snes.png", &imgunk[2]);
+			if (iPixelHover == 1)
+				{ HoverPathRegisterImage (imgunk[2], PNG_VARIOUS,
+					"sel_unknown_snes.png"); }
 			break;
 	}
 	PreLoad (PNG_BUTTONS, "up_0.png", &imgup_0);
@@ -14937,101 +15525,30 @@ void InitScreen (void)
 
 					if (iScreen == 1)
 					{
-						/*** User hovers over tiles in the upper row. ***/
-						if ((InArea (iHor1, iVer1 + iTTP1, iHor2, iVer2 + iTTPO)
-							== 1) && (iSelected != 1))
-							{ iSelected = 1; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor2, iVer1 + iTTP1, iHor3, iVer2 + iTTPO)
-							== 1) && (iSelected != 2))
-							{ iSelected = 2; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor3, iVer1 + iTTP1, iHor4, iVer2 + iTTPO)
-							== 1) && (iSelected != 3))
-							{ iSelected = 3; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor4, iVer1 + iTTP1, iHor5, iVer2 + iTTPO)
-							== 1) && (iSelected != 4))
-							{ iSelected = 4; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor5, iVer1 + iTTP1, iHor6, iVer2 + iTTPO)
-							== 1) && (iSelected != 5))
-							{ iSelected = 5; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor6, iVer1 + iTTP1, iHor7, iVer2 + iTTPO)
-							== 1) && (iSelected != 6))
-							{ iSelected = 6; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor7, iVer1 + iTTP1, iHor8, iVer2 + iTTPO)
-							== 1) && (iSelected != 7))
-							{ iSelected = 7; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor8, iVer1 + iTTP1, iHor9, iVer2 + iTTPO)
-							== 1) && (iSelected != 8))
-							{ iSelected = 8; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor9, iVer1 + iTTP1, iHor10, iVer2 + iTTPO)
-							== 1) && (iSelected != 9))
-							{ iSelected = 9; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor10, iVer1 + iTTP1, iHor10 + iDX,
-							iVer2 + iTTPO) == 1) && (iSelected != 10))
-						{ iSelected = 10; ShowScreen (1, ascreen); }
-
-						/*** User hovers over tiles in the middle row. ***/
-						else if ((InArea (iHor1, iVer2 + iTTPO, iHor2, iVer3 + iTTPO)
-							== 1) && (iSelected != 11))
-							{ iSelected = 11; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor2, iVer2 + iTTPO, iHor3, iVer3 + iTTPO)
-							== 1) && (iSelected != 12))
-							{ iSelected = 12; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor3, iVer2 + iTTPO, iHor4, iVer3 + iTTPO)
-							== 1) && (iSelected != 13))
-							{ iSelected = 13; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor4, iVer2 + iTTPO, iHor5, iVer3 + iTTPO)
-							== 1) && (iSelected != 14))
-							{ iSelected = 14; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor5, iVer2 + iTTPO, iHor6, iVer3 + iTTPO)
-							== 1) && (iSelected != 15))
-							{ iSelected = 15; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor6, iVer2 + iTTPO, iHor7, iVer3 + iTTPO)
-							== 1) && (iSelected != 16))
-							{ iSelected = 16; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor7, iVer2 + iTTPO, iHor8, iVer3 + iTTPO)
-							== 1) && (iSelected != 17))
-							{ iSelected = 17; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor8, iVer2 + iTTPO, iHor9, iVer3 + iTTPO)
-							== 1) && (iSelected != 18))
-							{ iSelected = 18; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor9, iVer2 + iTTPO, iHor10, iVer3 + iTTPO)
-							== 1) && (iSelected != 19))
-							{ iSelected = 19; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor10, iVer2 + iTTPO, iHor10 + iDX,
-							iVer3 + iTTPO) == 1) && (iSelected != 20))
-						{ iSelected = 20; ShowScreen (1, ascreen); }
-
-						/*** User hovers over tiles in the bottom row. ***/
-						else if ((InArea (iHor1, iVer3 + iTTPO, iHor2, iVer3 + iDY + iTTPO)
-							== 1) && (iSelected != 21))
-							{ iSelected = 21; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor2, iVer3 + iTTPO, iHor3, iVer3 + iDY + iTTPO)
-							== 1) && (iSelected != 22))
-							{ iSelected = 22; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor3, iVer3 + iTTPO, iHor4, iVer3 + iDY + iTTPO)
-							== 1) && (iSelected != 23))
-							{ iSelected = 23; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor4, iVer3 + iTTPO, iHor5, iVer3 + iDY + iTTPO)
-							== 1) && (iSelected != 24))
-							{ iSelected = 24; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor5, iVer3 + iTTPO, iHor6, iVer3 + iDY + iTTPO)
-							== 1) && (iSelected != 25))
-							{ iSelected = 25; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor6, iVer3 + iTTPO, iHor7, iVer3 + iDY + iTTPO)
-							== 1) && (iSelected != 26))
-							{ iSelected = 26; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor7, iVer3 + iTTPO, iHor8, iVer3 + iDY + iTTPO)
-							== 1) && (iSelected != 27))
-							{ iSelected = 27; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor8, iVer3 + iTTPO, iHor9, iVer3 + iDY + iTTPO)
-							== 1) && (iSelected != 28))
-							{ iSelected = 28; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor9, iVer3 + iTTPO, iHor10, iVer3 + iDY +
-							iTTPO) == 1) && (iSelected != 29))
-							{ iSelected = 29; ShowScreen (1, ascreen); }
-						else if ((InArea (iHor10, iVer3 + iTTPO, iHor10 + iDX,
-							iVer3 + iDY + iTTPO) == 1) && (iSelected != 30))
-						{ iSelected = 30; ShowScreen (1, ascreen); }
+					/*** User hovers over tiles. ***/
+					{
+						int iHoverNew;
+						if (iPixelHover == 1) { iHoverNew = HoverTileAtMouse(); }
+						else { iHoverNew = HoverTileAtMouseLegacy(); }
+						if ((iPixelHover == 1) && (iDebug == 1) &&
+							((iHoverNew != iHoverDebugLastHit) ||
+							(iSelected != iHoverDebugLastSelected) ||
+							(abs (iXPos - iHoverDebugLastX) >= 8) ||
+							(abs (iYPos - iHoverDebugLastY) >= 8)))
+						{
+							printf ("[DEBUG] hover mouse=(%i,%i) hit=%i selected=%i "
+								"paths=%i cache=%i built=%i evicted=%i failed=%i\n",
+								iXPos, iYPos, iHoverNew, iSelected, iHoverPathCount,
+								iHoverMaskCount, iHoverMaskBuildCount,
+								iHoverMaskEvictCount, iHoverMaskFail);
+							iHoverDebugLastX = iXPos;
+							iHoverDebugLastY = iYPos;
+							iHoverDebugLastHit = iHoverNew;
+							iHoverDebugLastSelected = iSelected;
+						}
+						if ((iHoverNew != 0) && (iSelected != iHoverNew))
+							{ iSelected = iHoverNew; ShowScreen (1, ascreen); }
+					}
 
 						/*** extras ***/
 						if ((InArea (610, 3, 619, 12) == 1) && (iExtras != 1))
@@ -16300,6 +16817,7 @@ void Quit (void)
 		TTF_CloseFont (font3);
 		TTF_CloseFont (font4);
 		TTF_CloseFont (font5);
+		HoverFree();
 		TTF_Quit();
 		SDL_Quit();
 		exit (EXIT_NORMAL);
@@ -16333,6 +16851,14 @@ void ShowScreen (int iScreenS, SDL_Renderer *screen)
 
 	/*** black background ***/
 	ShowImage (-4, (int[]){1, 0, 0, 0}, screen, 31, 0, 0, 692, 455);
+
+	/*** Clear hover slot cache before re-drawing all tiles. ***/
+	if ((iScreenS == 1) && (iPixelHover == 1))
+	{
+		int iClearI;
+		for (iClearI = 1; iClearI <= 30; iClearI++)
+			{ arHoverSlot[iClearI].iActive = 0; }
+	}
 
 	if (iScreenS == 1)
 	{
@@ -18004,6 +18530,21 @@ void ShowPos (SDL_Rect loc, SDL_Rect dest, int iLocation,
 	}
 
 	iPosShown = 1;
+	if (cCurType == 'd') { HoverSlotStore (dest, iLocation, img_first[2]); }
+	else { HoverSlotStore (dest, iLocation, img_second[2]); }
+}
+/*****************************************************************************/
+void HoverSlotStore (SDL_Rect dest, int iLocation, SDL_Texture *imgSel)
+/*****************************************************************************/
+{
+	/*** Record hover slot for pixel-perfect mouse hit-testing. ***/
+	if (iPixelHover == 0) { return; }
+	if ((iLocation >= 1) && (iLocation <= 30))
+	{
+		arHoverSlot[iLocation].iActive = 1;
+		arHoverSlot[iLocation].dest = dest;
+		arHoverSlot[iLocation].imgSel = imgSel;
+	}
 }
 /*****************************************************************************/
 void ShowPosPoP2 (SDL_Rect loc, SDL_Rect dest, int iLocation,
@@ -18024,6 +18565,7 @@ void ShowPosPoP2 (SDL_Rect loc, SDL_Rect dest, int iLocation,
 	}
 
 	iPosShown = 1;
+	HoverSlotStore (dest, iLocation, img[2]);
 }
 /*****************************************************************************/
 void ShowPosSNES (SDL_Rect loc, SDL_Rect dest, int iLocation,
@@ -18046,6 +18588,7 @@ void ShowPosSNES (SDL_Rect loc, SDL_Rect dest, int iLocation,
 	}
 
 	iPosShown = 1;
+	HoverSlotStore (dest, iLocation, img[2]);
 }
 /*****************************************************************************/
 void ShowDetail (SDL_Texture *img[2 + 2], SDL_Rect loc,
@@ -25623,6 +26166,7 @@ void ShowUsage (void)
 		" exit\n");
 	printf ("  -y,        --import         import PoP1 for DOS levels as XML\n");
 	printf ("  -d,        --debug          also show levels on the console\n");
+	printf ("             --pixel-hover    use pixel-perfect room tile hover\n");
 	printf ("  -n,        --noaudio        mute editor and game audio\n");
 	printf ("  -q,        --quiteloud      chompers in-editor make noise\n");
 	printf ("  -i,        --improved       use \"improved\" as the cheat"
@@ -32280,6 +32824,9 @@ void PreLoadSet (char *sPath, char cType, char *sTile, SDL_Texture **img)
 		printf ("[FAILED] IMG_LoadTexture: %s\n", IMG_GetError());
 		exit (EXIT_ERROR);
 	}
+
+	/*** Hover masks are generated lazily from the selected image path. ***/
+	if (iPixelHover == 1) { HoverPathRegister (img[2], sImage); }
 
 	iPreLoaded+=2;
 	iBarHeight = (int)(((float)iPreLoaded/(float)iNrToPreLoad) * BAR_FULL);

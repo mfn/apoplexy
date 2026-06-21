@@ -11,6 +11,8 @@ option(APOPLEXY_BUILD_APP
 	"Build the apoplexy executable" ON)
 option(APOPLEXY_BUILD_PR
 	"Build the Princed Resources helper" ON)
+option(APOPLEXY_ENABLE_SANITIZERS
+	"Build apoplexy with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
 set(APOPLEXY_EXTRA_CPPCHECK_FLAGS "" CACHE STRING
 	"Extra flags passed to the cppcheck target")
@@ -63,6 +65,19 @@ if(APOPLEXY_BUILD_APP)
 		target_compile_options(apoplexy PRIVATE
 			-Wno-format-truncation
 			-Wno-stringop-overflow)
+	endif()
+
+	if(APOPLEXY_ENABLE_SANITIZERS)
+		if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+			target_compile_options(apoplexy PRIVATE
+				-fsanitize=address,undefined
+				-fno-omit-frame-pointer)
+			target_link_options(apoplexy PRIVATE
+				-fsanitize=address,undefined)
+		else()
+			message(FATAL_ERROR
+				"APOPLEXY_ENABLE_SANITIZERS requires GCC or Clang")
+		endif()
 	endif()
 
 	find_package(PkgConfig REQUIRED)

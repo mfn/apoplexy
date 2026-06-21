@@ -31,6 +31,10 @@
 #include <time.h>
 #include <errno.h>
 #include <dirent.h>
+#include <ctype.h>
+#if !(defined WIN32 || _WIN32 || WIN64 || _WIN64)
+#include <sys/wait.h>
+#endif
 #if defined WIN32 || _WIN32 || WIN64 || _WIN64
 #include <windows.h>
 #undef PlaySound
@@ -2061,7 +2065,7 @@ void CreateVariousSNES (unsigned char *sVariousS);
 void Decompress (int iFd, char *sWhat, int iNeed,
 	unsigned char *sDecompressed);
 int Compress (char *sWhat, int iNeed, unsigned char *sToCompress,
-	unsigned char *sCompressed);
+	unsigned char *sCompressed, int iCompressedMax);
 int EventInfo (int iNr, int iType);
 int ReadFromFile (int iFd, char *sWhat, int iSize, unsigned char *sRetString);
 int ReadLineFromFile (int iFd, char *sRetString, int iLtrim);
@@ -2099,6 +2103,10 @@ int StartGame (void *unused);
 int StartGameS (void *unused);
 int StartGameM (void *unused);
 int UPack (void *unused);
+int SystemExitCode (int iStatus);
+int SystemCommandFailed (const char *sCommand);
+int PRCommandFailed (const char *sCommand, int iExpectedExit);
+int HasShellMeta (char *sString);
 void CleanupSDL (void);
 void Quit (void);
 void ShowScreen (int iScreenS, SDL_Renderer *screen);
@@ -2160,9 +2168,12 @@ void CallSave (int iJustXML);
 int ChecksumOrWrite (int iFd);
 void SavePLV (char *sFileName);
 int WriteUserData (int iFd, int iType);
+void WriteAll (int iFd, const void *pData, size_t zSize, const char *sWhat);
+void WriteString (int iFd, const char *sString, const char *sWhat);
+void CloseFileChecked (int iFd, const char *sWhat);
 void WriteCharByChar (int iFd, unsigned char *sString, int iLength);
 int AddCharByChar (unsigned char *sTo, int iToSize,
-	unsigned char *sString, int iLength);
+	int iToMax, unsigned char *sString, int iLength);
 void ShowUsage (void);
 void PrIfDe (char *sString);
 void MixAudio (void *unused, Uint8 *stream, int iLen);
@@ -2210,7 +2221,14 @@ void CheckCodes (char *sHex, int iFdEXE);
 void Zoom (int iToggleFull);
 void Sprinkle (void);
 void LoadLevel (int iLevel);
-void GetOptionValue (char *sArgv, char *sValue);
+void GetOptionValue (char *sArgv, char *sValue, int iMax);
+void ValidateEXETypeForGame (int iGame);
+int IsNoRoomLink (int iRoom);
+int IsValidRoomNr (int iRoom);
+void RequireValidRoomNr (int iRoom, char *sWhat);
+void RequireValidLocationNr (int iLocation, char *sWhat);
+void ValidateRoomLinksLoaded (void);
+int GetValidRoomLink (int iRoom, int iSide, int *iLink);
 void FlipRoom (int iRoom, int iAxis);
 void CopyPaste (int iRoom, int iAction);
 void DateTime (char *sDateTime);
@@ -2262,8 +2280,9 @@ void substr (char *sString, int iStart, int iLength, char *sOutput);
 void substru (unsigned char *sString, int iStart,
 	int iLength, unsigned char *sOutput);
 int strpos (char *sHaystack, char *sNeedle, int iOffset);
-void XMLValue (char *sLine, char *sKey, char *sValue);
-void XMLTag (char *sLine, char *sTag);
+int XMLValue (char *sLine, char *sKey, char *sValue);
+void RequireXMLValue (char *sLine, char *sKey, char *sValue, int iLine);
+int XMLTag (char *sLine, char *sTag);
 int Block (int iRoom, int iLocation, char *sBlock);
 void ModifyForZSNES (int iLevel);
 void ModifyBack (void);
@@ -2497,7 +2516,7 @@ int main (int argc, char *argv[])
 			else if ((strncmp (argv[iTemp], "-a=", 3) == 0) ||
 				(strncmp (argv[iTemp], "--author=", 9) == 0))
 			{
-				GetOptionValue (argv[iTemp], sAuthor);
+				GetOptionValue (argv[iTemp], sAuthor, MAX_OPTION);
 				if (iDebug == 1)
 					printf ("[ INFO ] Using author name: %s\n", sAuthor);
 			}
@@ -2514,14 +2533,14 @@ int main (int argc, char *argv[])
 			else if ((strncmp (argv[iTemp], "-l=", 3) == 0) ||
 				(strncmp (argv[iTemp], "--level=", 8) == 0))
 			{
-				GetOptionValue (argv[iTemp], sStartLevel);
+				GetOptionValue (argv[iTemp], sStartLevel, MAX_OPTION);
 				iStartLevel = atoi (sStartLevel);
 			}
 			else if ((strncmp (argv[iTemp], "-c=", 3) == 0) ||
 				(strncmp (argv[iTemp], "--cheat=", 8) == 0))
 			{
-				GetOptionValue (argv[iTemp], sCheat1);
-				GetOptionValue (argv[iTemp], sCheat2);
+				GetOptionValue (argv[iTemp], sCheat1, MAX_OPTION);
+				GetOptionValue (argv[iTemp], sCheat2, MAX_OPTION);
 				iUserCode = 1;
 				if (iDebug == 1)
 					printf ("[ INFO ] Using cheat code: %s\n", sCheat1);
@@ -2554,7 +2573,12 @@ int main (int argc, char *argv[])
 			else if ((strncmp (argv[iTemp], "-e=", 3) == 0) ||
 				(strncmp (argv[iTemp], "--exe=", 6) == 0))
 			{
-				GetOptionValue (argv[iTemp], sEXEType);
+				if ((int)strlen (strchr (argv[iTemp], '=') + 1) >= MAX_EXETYPE)
+				{
+					printf ("[FAILED] Executable type is too long!\n");
+					exit (EXIT_ERROR);
+				}
+				GetOptionValue (argv[iTemp], sEXEType, MAX_EXETYPE);
 				/*** PoP1 for DOS ***/
 				if (strcmp (sEXEType, "p0") == 0) { iEXEType = 0; iEXEPacked = 1; }
 				if (strcmp (sEXEType, "u0") == 0) { iEXEType = 1; iEXEPacked = 0; }
@@ -2661,15 +2685,19 @@ void CheckLatest (void)
 	if (curl != NULL)
 	{
 		fFile = fopen ("latest_release.xml", "wb");
+		if (fFile == NULL)
+		{
+			printf ("[ WARN ] Could not create latest_release.xml: %s!\n",
+				strerror (errno));
+			curl_easy_cleanup (curl);
+			return;
+		}
 		curl_easy_setopt (curl, CURLOPT_URL, URL_LATEST);
 		curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, WriteData);
 		curl_easy_setopt (curl, CURLOPT_WRITEDATA, fFile);
 		curl_easy_setopt (curl, CURLOPT_FAILONERROR, 1L);
-		/* Without this, the Windows port will say "Peer certificate cannot be
-		 * authenticated with given CA certificates!". This may be related to
-		 * the (old?) cURL version.
-		 */
-		curl_easy_setopt (curl, CURLOPT_SSL_VERIFYPEER, 0);
+		curl_easy_setopt (curl, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt (curl, CURLOPT_SSL_VERIFYHOST, 2L);
 		/*** Without this, the connect timeout will be 300 seconds. ***/
 		curl_easy_setopt (curl, CURLOPT_CONNECTTIMEOUT, 3L);
 		res = curl_easy_perform (curl);
@@ -2698,6 +2726,7 @@ void CheckLatest (void)
 							iPatch = atoi (sValue); break;
 					}
 				} while (iEOF == 0);
+				close (iFd);
 				if ((iMajor > EDITOR_VERSION_MAJOR) ||
 					((iMajor == EDITOR_VERSION_MAJOR) &&
 					(iMinor > EDITOR_VERSION_MINOR)) ||
@@ -2767,13 +2796,13 @@ void CheckRequiredFiles (void)
 					(strcmp (stDirent->d_name, "..") != 0))
 				{
 					snprintf (sExtension, 100, "%s", strrchr (stDirent->d_name, '.'));
-					if ((toupper (sExtension[1]) == 'S') &&
-						(toupper (sExtension[2]) == 'M') &&
-						(toupper (sExtension[3]) == 'C'))
+					if ((toupper ((unsigned char)sExtension[1]) == 'S') &&
+						(toupper ((unsigned char)sExtension[2]) == 'M') &&
+						(toupper ((unsigned char)sExtension[3]) == 'C'))
 						{ iFound = 1; } /*** Super Magicom ***/
-					if ((toupper (sExtension[1]) == 'S') &&
-						(toupper (sExtension[2]) == 'F') &&
-						(toupper (sExtension[3]) == 'C'))
+					if ((toupper ((unsigned char)sExtension[1]) == 'S') &&
+						(toupper ((unsigned char)sExtension[2]) == 'F') &&
+						(toupper ((unsigned char)sExtension[3]) == 'C'))
 						{ iFound = 1; } /*** Super Famicom ***/
 					if (iFound == 1)
 					{
@@ -2898,6 +2927,12 @@ void LoadPLV (char *sFileName)
 		if ((iFirstSecond >= 0) && (iFirstSecond <= 13))
 			{ luLevelNr = iFirstSecond + 1; }
 				else { luLevelNr = iFirstSecond - 5; }
+	}
+	if (((iEditPoP == 1) && (luLevelNr > 15)) ||
+		((iEditPoP == 2) && ((luLevelNr < 1) || (luLevelNr > 28))))
+	{
+		printf ("[FAILED] Invalid level number: %lu!\n", luLevelNr);
+		exit (EXIT_ERROR);
 	}
 	if (iDebug == 1)
 	{
@@ -3116,9 +3151,11 @@ void LoadPLV (char *sFileName)
 		{
 			printf ("[ INFO ] Room %i is connected to room (0 = none): l%i, "
 				"r%i, u%i, d%i\n", (iTemp / 4) + 1, sRoomLinks[iTemp],
-				sRoomLinks[iTemp + 1], sRoomLinks[iTemp + 2], sRoomLinks[iTemp + 3]);
+				sRoomLinks[iTemp + 1], sRoomLinks[iTemp + 2],
+				sRoomLinks[iTemp + 3]);
 		}
 	}
+	ValidateRoomLinksLoaded();
 
 	if (iEditPoP == 1)
 	{
@@ -3261,6 +3298,16 @@ void LoadPLV (char *sFileName)
 	arKidRoom[1] = sStartPosition[0];
 	arKidPos[1] = sStartPosition[1] + 1;
 	arKidDir[1] = FixDir (sStartPosition[2]); /*** 1 of 4 (DOS) ***/
+	RequireValidRoomNr (arKidRoom[1], "player start");
+	RequireValidLocationNr (arKidPos[1], "player start");
+	if (iEditPoP == 1)
+	{
+		for (iLoopPlayer = 2; iLoopPlayer <= iNrPlayers; iLoopPlayer++)
+		{
+			RequireValidRoomNr (arKidRoom[iLoopPlayer], "player start");
+			RequireValidLocationNr (arKidPos[iLoopPlayer], "player start");
+		}
+	}
 
 	if (iEditPoP != 1)
 	{
@@ -3310,6 +3357,12 @@ void LoadPLV (char *sFileName)
 		for (iTemp = 0; iTemp < iRooms; iTemp++)
 		{
 			iStaticGuards_Amount[iTemp] = sStaticGuards[(iTemp * 116) + 0];
+			if (iStaticGuards_Amount[iTemp] > STATIC)
+			{
+				printf ("[FAILED] Too many static guards in room %i: %i!\n",
+					iTemp + 1, iStaticGuards_Amount[iTemp]);
+				exit (EXIT_ERROR);
+			}
 			for (iStatic = 0; iStatic < STATIC; iStatic++)
 			{
 				iStaticGuards_1_Locations[iTemp][iStatic] =
@@ -3368,6 +3421,12 @@ void LoadPLV (char *sFileName)
 		for (iTemp = 0; iTemp < iRooms; iTemp++)
 		{
 			iDynamicGuards_Sets[iTemp] = sDynamicGuards[(iTemp * 34) + 0];
+			if (iDynamicGuards_Sets[iTemp] > DYNAMIC)
+			{
+				printf ("[FAILED] Too many dynamic guards in room %i: %i!\n",
+					iTemp + 1, iDynamicGuards_Sets[iTemp]);
+				exit (EXIT_ERROR);
+			}
 			iDynamicGuards_Skill[iTemp] = sDynamicGuards[(iTemp * 34) + 1];
 			iDynamicGuards_Unknown1[iTemp] = sDynamicGuards[(iTemp * 34) + 2];
 			iDynamicGuards_Unknown2[iTemp] = sDynamicGuards[(iTemp * 34) + 3];
@@ -3542,6 +3601,11 @@ void LoadPLV (char *sFileName)
 	{
 		printf ("[ INFO ] The user data count is: %lu\n", luNumber);
 	}
+	if (luNumber > USER_DATA)
+	{
+		printf ("[FAILED] User data is too large: %lu bytes!\n", luNumber);
+		exit (EXIT_ERROR);
+	}
 	ReadFromFile (iFd, "User Data", (int)luNumber, sUserData);
 	snprintf (sString, 100, "%s", "");
 	iInformationNr = 0;
@@ -3550,6 +3614,11 @@ void LoadPLV (char *sFileName)
 	{
 		if (sUserData[iTemp] == '\0')
 		{
+			if (iInformationNr >= 20)
+			{
+				printf ("[FAILED] Too many user data fields!\n");
+				exit (EXIT_ERROR);
+			}
 			snprintf (sInformation[iInformationNr + 1][iFieldOrValue], 100, "%s",
 				sString);
 			snprintf (sString, 100, "%s", "");
@@ -3633,6 +3702,10 @@ void LoadXML (char *sFileName)
 	int iTileNumber;
 	int iEventNumber;
 	int iFieldNumber;
+	int iXMLValue;
+	int iEventRoom;
+	int iEventLocation;
+	int iEventNext;
 	char sBitsRoom[8 + 2];
 	char sBitsLocation[8 + 2];
 	char sBitsNext[8 + 2];
@@ -3664,6 +3737,11 @@ void LoadXML (char *sFileName)
 		/*** source ***/
 		if ((iLine == 2) && (iDebug == 1))
 		{
+			if ((int)strlen (sLine) < 56)
+			{
+				printf ("[FAILED] Malformed XML source comment!\n");
+				exit (EXIT_ERROR);
+			}
 			substr (sLine, 26, 19, sDateTime);
 			substr (sLine, 51, strlen (sLine) - 56, sProgram);
 			printf ("[ INFO ] Created on %s by %s.\n", sDateTime, sProgram);
@@ -3672,8 +3750,14 @@ void LoadXML (char *sFileName)
 		/*** level number ***/
 		if (iLine == 3)
 		{
-			XMLValue (sLine, "number", sValue);
-			sLevelNumber[0] = atoi (sValue);
+			RequireXMLValue (sLine, "number", sValue, iLine);
+			iXMLValue = atoi (sValue);
+			if ((iXMLValue < 0) || (iXMLValue > 15))
+			{
+				printf ("[FAILED] Invalid XML level number: %i!\n", iXMLValue);
+				exit (EXIT_ERROR);
+			}
+			sLevelNumber[0] = iXMLValue;
 			snprintf (sString, MAX_DATA, "%02x", sLevelNumber[0]);
 			luLevelNr = strtoul (sString, NULL, 16);
 		}
@@ -3692,35 +3776,66 @@ void LoadXML (char *sFileName)
 					printf ("[FAILED] Could not find \"</rooms>\"!");
 					exit (EXIT_ERROR);
 				}
-				XMLTag (sLine, sTag);
+				if (XMLTag (sLine, sTag) == 0)
+				{
+					if (iEndTag == 0)
+					{
+						printf ("[FAILED] Malformed XML tag on line %i!\n", iLine);
+						exit (EXIT_ERROR);
+					}
+				}
 				if (strcmp (sTag, "room") == 0)
 				{
-					XMLValue (sLine, "number", sValue);
+					RequireXMLValue (sLine, "number", sValue, iLine);
 					iRoomNumber = atoi (sValue);
+					RequireValidRoomNr (iRoomNumber, "XML room");
 					iTileNumber = -1;
 				}
 				if (strcmp (sTag, "tile") == 0)
 				{
+					RequireValidRoomNr (iRoomNumber, "XML tile");
 					iTileNumber++;
-					XMLValue (sLine, "element", sValue);
-					iThingA[iRoomNumber][iTileNumber] = atoi (sValue);
-					XMLValue (sLine, "modifier", sValue);
-					iModifierA[iRoomNumber][iTileNumber][1] = atoi (sValue);
+					if (iTileNumber > 29)
+					{
+						printf ("[FAILED] Too many tiles in XML room %i!\n",
+							iRoomNumber);
+						exit (EXIT_ERROR);
+					}
+					RequireXMLValue (sLine, "element", sValue, iLine);
+					iXMLValue = atoi (sValue);
+					if ((iXMLValue < 0) || (iXMLValue > 255))
+					{
+						printf ("[FAILED] Invalid XML tile element: %i!\n",
+							iXMLValue);
+						exit (EXIT_ERROR);
+					}
+					iThingA[iRoomNumber][iTileNumber] = iXMLValue;
+					RequireXMLValue (sLine, "modifier", sValue, iLine);
+					iXMLValue = atoi (sValue);
+					if ((iXMLValue < 0) || (iXMLValue > 255))
+					{
+						printf ("[FAILED] Invalid XML tile modifier: %i!\n",
+							iXMLValue);
+						exit (EXIT_ERROR);
+					}
+					iModifierA[iRoomNumber][iTileNumber][1] = iXMLValue;
 				}
 				if (strcmp (sTag, "links") == 0)
 				{
-					XMLValue (sLine, "left", sValue);
+					RequireValidRoomNr (iRoomNumber, "XML links");
+					RequireXMLValue (sLine, "left", sValue, iLine);
 					iRoomConnections[iRoomNumber][1] = atoi (sValue);
-					XMLValue (sLine, "right", sValue);
+					RequireXMLValue (sLine, "right", sValue, iLine);
 					iRoomConnections[iRoomNumber][2] = atoi (sValue);
-					XMLValue (sLine, "up", sValue);
+					RequireXMLValue (sLine, "up", sValue, iLine);
 					iRoomConnections[iRoomNumber][3] = atoi (sValue);
-					XMLValue (sLine, "down", sValue);
+					RequireXMLValue (sLine, "down", sValue, iLine);
 					iRoomConnections[iRoomNumber][4] = atoi (sValue);
 				}
 				if (strcmp (sTag, "guard") == 0)
 				{
-					XMLValue (sLine, "location", sValue);
+					RequireValidRoomNr (iRoomNumber, "XML guard");
+					RequireXMLValue (sLine, "location", sValue, iLine);
 					iGuardLocation = atoi (sValue);
 					if (iGuardLocation == 0) /*** no guard ***/
 					{
@@ -3728,22 +3843,38 @@ void LoadXML (char *sFileName)
 					} else if ((iGuardLocation >= 1) && (iGuardLocation <= 30)) {
 						sGuardLocations[iRoomNumber - 1] = iGuardLocation - 1;
 					} else {
-						printf ("[ WARN ] Incorrect guard location \"%i\" in room %i!\n",
+						printf ("[FAILED] Incorrect guard location \"%i\" in room %i!\n",
 							iGuardLocation, iRoomNumber);
+						exit (EXIT_ERROR);
 					}
-					XMLValue (sLine, "direction", sValue);
+					RequireXMLValue (sLine, "direction", sValue, iLine);
 					switch (atoi (sValue))
 					{
 						case 1: sGuardDirections[iRoomNumber - 1] = 0; break;
 						case 2: sGuardDirections[iRoomNumber - 1] = 255; break;
-						default: printf ("[ WARN ] Unknown guard direction!\n"); break;
+						default:
+							printf ("[FAILED] Unknown guard direction!\n");
+							exit (EXIT_ERROR);
 					}
-					XMLValue (sLine, "skill", sValue);
-					sGuardSkills[iRoomNumber - 1] = atoi (sValue);
-					XMLValue (sLine, "colors", sValue);
-					sGuardColors[iRoomNumber - 1] = atoi (sValue);
+					RequireXMLValue (sLine, "skill", sValue, iLine);
+					iXMLValue = atoi (sValue);
+					if ((iXMLValue < 0) || (iXMLValue > 255))
+					{
+						printf ("[FAILED] Invalid guard skill: %i!\n", iXMLValue);
+						exit (EXIT_ERROR);
+					}
+					sGuardSkills[iRoomNumber - 1] = iXMLValue;
+					RequireXMLValue (sLine, "colors", sValue, iLine);
+					iXMLValue = atoi (sValue);
+					if ((iXMLValue < 0) || (iXMLValue > 255))
+					{
+						printf ("[FAILED] Invalid guard colors: %i!\n", iXMLValue);
+						exit (EXIT_ERROR);
+					}
+					sGuardColors[iRoomNumber - 1] = iXMLValue;
 				}
 			} while (iEndTag == 0);
+			ValidateRoomLinksLoaded();
 		}
 
 		/*** events ***/
@@ -3759,22 +3890,44 @@ void LoadXML (char *sFileName)
 					printf ("[FAILED] Could not find \"</events>\"!");
 					exit (EXIT_ERROR);
 				}
-				XMLTag (sLine, sTag);
+				if (XMLTag (sLine, sTag) == 0)
+				{
+					if (iEndTag == 0)
+					{
+						printf ("[FAILED] Malformed XML tag on line %i!\n", iLine);
+						exit (EXIT_ERROR);
+					}
+				}
 				if (strcmp (sTag, "event") == 0)
 				{
 					iEventNumber++;
-					XMLValue (sLine, "number", sValue);
+					if (iEventNumber >= 256)
+					{
+						printf ("[FAILED] Too many XML events!\n");
+						exit (EXIT_ERROR);
+					}
+					RequireXMLValue (sLine, "number", sValue, iLine);
 					if (atoi (sValue) != iEventNumber + 1)
 					{
 						printf ("[FAILED] Events not in the correct order!\n");
 						exit (EXIT_ERROR);
 					}
-					XMLValue (sLine, "room", sValue);
-					IntToBits (atoi (sValue), sBitsRoom, 5);
-					XMLValue (sLine, "location", sValue);
-					IntToBits (atoi (sValue) - 1, sBitsLocation, 5);
-					XMLValue (sLine, "next", sValue);
-					switch (atoi (sValue))
+					RequireXMLValue (sLine, "room", sValue, iLine);
+					iEventRoom = atoi (sValue);
+					if ((iEventRoom != 0) && (IsValidRoomNr (iEventRoom) == 0))
+					{
+						printf ("[FAILED] Invalid XML event room: %i!\n",
+							iEventRoom);
+						exit (EXIT_ERROR);
+					}
+					IntToBits (iEventRoom, sBitsRoom, 5);
+					RequireXMLValue (sLine, "location", sValue, iLine);
+					iEventLocation = atoi (sValue);
+					RequireValidLocationNr (iEventLocation, "XML event");
+					IntToBits (iEventLocation - 1, sBitsLocation, 5);
+					RequireXMLValue (sLine, "next", sValue, iLine);
+					iEventNext = atoi (sValue);
+					switch (iEventNext)
 					{
 						case 0: sBitsNext[0] = '1'; sBitsNext[1] = '\0'; break;
 						case 1: sBitsNext[0] = '0'; sBitsNext[1] = '\0'; break;
@@ -3812,15 +3965,20 @@ void LoadXML (char *sFileName)
 		XMLTag (sLine, sTag);
 		if (strcmp (sTag, "prince") == 0)
 		{
-			XMLValue (sLine, "room", sValue);
+			RequireXMLValue (sLine, "room", sValue, iLine);
 			arKidRoom[1] = strtoul (sValue, NULL, 10);
-			XMLValue (sLine, "location", sValue);
+			RequireValidRoomNr (arKidRoom[1], "XML prince");
+			RequireXMLValue (sLine, "location", sValue, iLine);
 			arKidPos[1] = strtoul (sValue, NULL, 10);
-			XMLValue (sLine, "direction", sValue);
+			RequireValidLocationNr (arKidPos[1], "XML prince");
+			RequireXMLValue (sLine, "direction", sValue, iLine);
 			switch (atoi (sValue))
 			{
 				case 1: arKidDir[1] = 0; break;
 				case 2: arKidDir[1] = 255; break;
+				default:
+					printf ("[FAILED] Unknown prince direction!\n");
+					exit (EXIT_ERROR);
 			}
 			/*** 2 of 4 (DOS) ***/
 			if (((int)luLevelNr == 1) || ((int)luLevelNr == 13))
@@ -3833,9 +3991,15 @@ void LoadXML (char *sFileName)
 		XMLTag (sLine, sTag);
 		if (strcmp (sTag, "userdata") == 0)
 		{
-			XMLValue (sLine, "fields", sValue);
+			RequireXMLValue (sLine, "fields", sValue, iLine);
 			luNumberOfFields = atoi (sValue);
 			iInformationNr = atoi (sValue);
+			if ((iInformationNr < 0) || (iInformationNr > 20))
+			{
+				printf ("[FAILED] Invalid XML user data field count: %i!\n",
+					iInformationNr);
+				exit (EXIT_ERROR);
+			}
 
 			/* It's unlikely anyone will ever use more than 255 fields, so
 			 * I'm using this cheap solution.
@@ -3855,17 +4019,30 @@ void LoadXML (char *sFileName)
 					printf ("[FAILED] Could not find \"</userdata>\"!");
 					exit (EXIT_ERROR);
 				}
-				XMLTag (sLine, sTag);
+				if (XMLTag (sLine, sTag) == 0)
+				{
+					if (iEndTag == 0)
+					{
+						printf ("[FAILED] Malformed XML tag on line %i!\n", iLine);
+						exit (EXIT_ERROR);
+					}
+				}
 				if (strcmp (sTag, "field") == 0)
 				{
 					iFieldNumber++;
 					if (iFieldNumber > (int)luNumberOfFields)
 					{
-						printf ("[ WARN ] More fields than indicated!\n");
+						printf ("[FAILED] More fields than indicated!\n");
+						exit (EXIT_ERROR);
 					}
-					XMLValue (sLine, "key", sValue);
+					if (iFieldNumber > 20)
+					{
+						printf ("[FAILED] Too many XML user data fields!\n");
+						exit (EXIT_ERROR);
+					}
+					RequireXMLValue (sLine, "key", sValue, iLine);
 					snprintf (sInformation[iFieldNumber][0], 100, "%s", sValue);
-					XMLValue (sLine, "value", sValue);
+					RequireXMLValue (sLine, "value", sValue, iLine);
 					snprintf (sInformation[iFieldNumber][1], 100, "%s", sValue);
 				}
 			} while (iEndTag == 0);
@@ -3975,6 +4152,13 @@ void LoadSMC (int iLevel)
 	for (iStoreLevel = 1; iStoreLevel <= 27; iStoreLevel++)
 	{
 		iStoredLevelsSizes[iStoreLevel] = CompressedLevelSize (iFd, iStoreLevel);
+		if ((iStoredLevelsSizes[iStoreLevel] < 1) ||
+			(iStoredLevelsSizes[iStoreLevel] > 5000))
+		{
+			printf ("[FAILED] Compressed SNES level %i is too large: %i!\n",
+				iStoreLevel, iStoredLevelsSizes[iStoreLevel]);
+			exit (EXIT_ERROR);
+		}
 		iLevelAddress = GetResourceAddress (iFd, iStoreLevel + 40);
 		LSeek (iFd, iLevelAddress);
 		ReadFromFile (iFd, "", iStoredLevelsSizes[iStoreLevel],
@@ -4105,6 +4289,7 @@ void LoadSMC (int iLevel)
 				sRoomLinks[iTemp + 3]);
 		}
 	}
+	ValidateRoomLinksLoaded();
 
 	/*** Load Start Position. ***/
 	snprintf (sString, MAX_DATA, "%02x", sStartPosition[0]);
@@ -4123,6 +4308,8 @@ void LoadSMC (int iLevel)
 	{
 		arKidRoom[1] = 1; arKidPos[1] = 28;
 	}
+	RequireValidRoomNr (arKidRoom[1], "SNES player start");
+	RequireValidLocationNr (arKidPos[1], "SNES player start");
 	if (iDebug == 1)
 	{
 		printf ("[ INFO ] The kid starts in room: %i, position: %i, turned: "
@@ -4380,20 +4567,25 @@ void SaveSMC (int iLevel)
 					{ arCompData[iComp][iTemp] = '\0'; }
 			}
 			iCompSize[1] = Compress ("Level Background", 720,
-				sLevelBackgroundS, arCompData[1]);
+				sLevelBackgroundS, arCompData[1], 720);
 			iCompSize[2] = Compress ("Level Foreground", 720,
-				sLevelForegroundS, arCompData[2]);
+				sLevelForegroundS, arCompData[2], 720);
 			iCompSize[3] = Compress ("Level Modifier", 720,
-				sLevelModifierS, arCompData[3]);
-			iCompSize[4] = Compress ("Block 1", 256, sBlock1, arCompData[4]);
-			iCompSize[5] = Compress ("Block 2", 256, sBlock2, arCompData[5]);
-			iCompSize[6] = Compress ("Block 3", 256, sBlock3, arCompData[6]);
-			iCompSize[7] = Compress ("Block 4", 256, sBlock4, arCompData[7]);
-			iCompSize[8] = Compress ("Various", 244, sVariousS, arCompData[8]);
+				sLevelModifierS, arCompData[3], 720);
+			iCompSize[4] = Compress ("Block 1", 256,
+				sBlock1, arCompData[4], 720);
+			iCompSize[5] = Compress ("Block 2", 256,
+				sBlock2, arCompData[5], 720);
+			iCompSize[6] = Compress ("Block 3", 256,
+				sBlock3, arCompData[6], 720);
+			iCompSize[7] = Compress ("Block 4", 256,
+				sBlock4, arCompData[7], 720);
+			iCompSize[8] = Compress ("Various", 244,
+				sVariousS, arCompData[8], 720);
 			iCompSize[9] = Compress ("First Door Events", 256,
-				sFirstDoorEvents, arCompData[9]);
+				sFirstDoorEvents, arCompData[9], 720);
 			iCompSize[10] = Compress ("Second Door Events", 256,
-				sSecondDoorEvents, arCompData[10]);
+				sSecondDoorEvents, arCompData[10], 720);
 			iLevelSize = 0;
 			for (iComp = 1; iComp <= 10; iComp++) { iLevelSize+=iCompSize[iComp]; }
 		} else { /*** Other levels. ***/
@@ -4564,6 +4756,7 @@ void Decompress (int iFd, char *sWhat, int iNeed,
 	int iX, iY, iD, iA;
 	int iTemp;
 	int iHave;
+	int iSource;
 
 	if ((iDebug == 1) && (strcmp (sWhat, "") != 0))
 		{ printf ("[  OK  ] Loading: %s\n", sWhat); }
@@ -4581,6 +4774,11 @@ void Decompress (int iFd, char *sWhat, int iNeed,
 		iX = sByte[0];
 		if (iX >= 128)
 		{
+			if (iHave + (iX - 128) > iNeed)
+			{
+				printf ("[FAILED] Decompressed %s is too large!\n", sWhat);
+				exit (EXIT_ERROR);
+			}
 			for (iTemp = 1; iTemp <= iX - 128; iTemp++)
 			{
 				ReadFromFile (iFd, "", 1, sByte);
@@ -4591,6 +4789,11 @@ void Decompress (int iFd, char *sWhat, int iNeed,
 			ReadFromFile (iFd, "", 1, sByte);
 			iY = sByte[0];
 			if (iY == 0) { iY = 256; }
+			if (iHave + iY > iNeed)
+			{
+				printf ("[FAILED] Decompressed %s is too large!\n", sWhat);
+				exit (EXIT_ERROR);
+			}
 			switch (iX)
 			{
 				case 1:
@@ -4627,7 +4830,13 @@ void Decompress (int iFd, char *sWhat, int iNeed,
 					iA = sByte[0];
 					for (iTemp = 1; iTemp <= iY; iTemp++)
 					{
-						sDecompressed[iHave] = sDecompressed[iA + iTemp - 1];
+						iSource = iA + iTemp - 1;
+						if ((iSource < 0) || (iSource >= iHave))
+						{
+							printf ("[FAILED] Invalid copy in %s!\n", sWhat);
+							exit (EXIT_ERROR);
+						}
+						sDecompressed[iHave] = sDecompressed[iSource];
 						iHave++;
 					}
 					break;
@@ -4636,7 +4845,13 @@ void Decompress (int iFd, char *sWhat, int iNeed,
 					iA = BytesAsLU (sTwoByte, 2);
 					for (iTemp = 1; iTemp <= iY; iTemp++)
 					{
-						sDecompressed[iHave] = sDecompressed[iA + iTemp - 1];
+						iSource = iA + iTemp - 1;
+						if ((iSource < 0) || (iSource >= iHave))
+						{
+							printf ("[FAILED] Invalid copy in %s!\n", sWhat);
+							exit (EXIT_ERROR);
+						}
+						sDecompressed[iHave] = sDecompressed[iSource];
 						iHave++;
 					}
 					break;
@@ -4650,7 +4865,7 @@ void Decompress (int iFd, char *sWhat, int iNeed,
 }
 /*****************************************************************************/
 int Compress (char *sWhat, int iNeed, unsigned char *sToCompress,
-	unsigned char *sCompressed)
+	unsigned char *sCompressed, int iCompressedMax)
 /*****************************************************************************/
 {
 	/* Pr1SnesLevEd and apoplexy differ from the original game. For example,
@@ -4774,16 +4989,20 @@ int Compress (char *sWhat, int iNeed, unsigned char *sToCompress,
 			if (iDataLength == 127)
 			{
 				sToAdd[0] = (unsigned char)(iDataLength + 128);
-				iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
-				iSize+=AddCharByChar (sCompressed, iSize, sData, iDataLength);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sToAdd, 1);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sData, iDataLength);
 				iDataLength = 0;
 			}
 		} else { /*** Compress. ***/
 			if (iDataLength > 0)
 			{
 				sToAdd[0] = (unsigned char)(iDataLength + 128);
-				iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
-				iSize+=AddCharByChar (sCompressed, iSize, sData, iDataLength);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sToAdd, 1);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sData, iDataLength);
 				iDataLength = 0;
 			}
 
@@ -4794,31 +5013,39 @@ int Compress (char *sWhat, int iNeed, unsigned char *sToCompress,
 					iX = 5;
 					SSLittleEndianToHexToInts (iSame, &iOut1, &iOut2);
 					sToAdd[0] = (unsigned char)iX;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
 					sToAdd[0] = (unsigned char)iLength;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
 					sToAdd[0] = (unsigned char)iOut2;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
 					sToAdd[0] = (unsigned char)iOut1;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
-					/* Or, also correct:
-					 * iSize+=AddCharByChar (sCompressed, iSize, &iSame, 2);
-					 */
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
+					/*** Or, also correct: add the two iSame bytes directly. ***/
 				} else { /*** X = 4 ***/
 					sToAdd[0] = (unsigned char)iX;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
 					sToAdd[0] = (unsigned char)iLength;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
 					sToAdd[0] = (unsigned char)iSame;
-					iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+					iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+						sToAdd, 1);
 				}
 			} else {
 				sToAdd[0] = (unsigned char)iX;
-				iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sToAdd, 1);
 				sToAdd[0] = (unsigned char)iLength;
-				iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sToAdd, 1);
 				sToAdd[0] = (unsigned char)sToCompress[iHave];
-				iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+				iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+					sToAdd, 1);
 			}
 			iHave+=iLength;
 		}
@@ -4828,15 +5055,16 @@ int Compress (char *sWhat, int iNeed, unsigned char *sToCompress,
 	if (iDataLength > 0)
 	{
 		sToAdd[0] = (unsigned char)(iDataLength + 128);
-		iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
-		iSize+=AddCharByChar (sCompressed, iSize, sData, iDataLength);
+		iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax, sToAdd, 1);
+		iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax,
+			sData, iDataLength);
 	}
 
 	/*** Fill the rest with 0x00. ***/
 	while (iHave < iNeed)
 	{
 		sToAdd[0] = (unsigned char)0x00;
-		iSize+=AddCharByChar (sCompressed, iSize, sToAdd, 1);
+		iSize+=AddCharByChar (sCompressed, iSize, iCompressedMax, sToAdd, 1);
 	}
 
 	return (iSize);
@@ -4891,14 +5119,13 @@ int ReadFromFile (int iFd, char *sWhat, int iSize, unsigned char *sRetString)
 	int iLength;
 	int iRead;
 	char sRead[1 + 2];
-	int iEOF;
+	char *sName;
 
 	if ((iDebug == 1) && (strcmp (sWhat, "") != 0))
 	{
 		printf ("[  OK  ] Loading: %s\n", sWhat);
 	}
 	iLength = 0;
-	iEOF = 0;
 	do {
 		iRead = read (iFd, sRead, 1);
 		switch (iRead)
@@ -4907,13 +5134,18 @@ int ReadFromFile (int iFd, char *sWhat, int iSize, unsigned char *sRetString)
 				printf ("[FAILED] Could not read (1): %s!\n", strerror (errno));
 				exit (EXIT_ERROR);
 				break;
-			case 0: PrIfDe ("[ INFO ] End of level file\n"); iEOF = 1; break;
+			case 0:
+				if (strcmp (sWhat, "") == 0) { sName = "data"; }
+					else { sName = sWhat; }
+				printf ("[FAILED] Unexpected EOF while reading %s!\n", sName);
+				exit (EXIT_ERROR);
+				break;
 			default:
 				sRetString[iLength] = sRead[0];
 				iLength++;
 				break;
 		}
-	} while ((iLength < iSize) && (iEOF == 0));
+	} while (iLength < iSize);
 	sRetString[iLength] = '\0';
 
 	iReadFromFile+=iLength;
@@ -5024,32 +5256,31 @@ void IntToBits (int iInt, char *sOutput, int iBits)
 	/*** Converts decimal to exactly iBits bits. ***/
 	/*** Example: 255 to 11111111 ***/
 
-	unsigned long luScale;
-	unsigned long luFinal;
-	int iTemp;
-	int iDigit;
-	char sOutputTemp[MAX_DATA + 2];
+	unsigned int uValue;
+	unsigned int uLimit;
+	int iLoop;
+	int iBit;
 
-	iTemp = iInt;
-	luScale = 1;
-	luFinal = 0;
-
-	while (iTemp > 0)
+	if ((iBits <= 0) || (iBits > 30) || (iInt < 0))
 	{
-		iDigit = iTemp % 2;
-		luFinal+=iDigit * luScale;
-		iTemp = iTemp / 2;
-		luScale = luScale * 10;
+		printf ("[FAILED] Cannot convert %i to %i bits!\n", iInt, iBits);
+		exit (EXIT_ERROR);
+	}
+	uValue = (unsigned int)iInt;
+	uLimit = 1U << iBits;
+	if (uValue >= uLimit)
+	{
+		printf ("[FAILED] Cannot fit %i in %i bits!\n", iInt, iBits);
+		exit (EXIT_ERROR);
 	}
 
-	snprintf (sOutput, MAX_DATA, "%lu", luFinal);
-	if ((int)strlen (sOutput) != iBits)
+	for (iLoop = 0; iLoop < iBits; iLoop++)
 	{
-		do {
-			snprintf (sOutputTemp, MAX_DATA, "%s", sOutput);
-			snprintf (sOutput, MAX_DATA, "0%s", sOutputTemp);
-		} while ((int)strlen (sOutput) != iBits);
+		iBit = (uValue >> (iBits - iLoop - 1)) & 1U;
+		if (iBit == 0) { sOutput[iLoop] = '0'; }
+			else { sOutput[iLoop] = '1'; }
 	}
+	sOutput[iBits] = '\0';
 }
 /*****************************************************************************/
 void GetForegroundAsName (char *sBinaryFore, char *sName)
@@ -16281,11 +16512,11 @@ int StartGame (void *unused)
 					{ snprintf (sMute, 200, "%s", " -c \"mixer master 0\""); }
 				snprintf (sSystem, 200, "dosbox%s %s -noconsole > %s", sMute,
 					BATCH_FILE, DEVNULL);
-				if (system (sSystem) == -1)
+				if (SystemCommandFailed (sSystem) == 1)
 					{ printf ("[FAILED] Could not execute PoP1 batch file!\n"); }
 			} else {
-				if (system ("cd " POP1_DIR " && "
-					HERE BATCH_FILE_NATIVE " > " DEVNULL) == -1)
+				if (SystemCommandFailed ("cd " POP1_DIR " && "
+					HERE BATCH_FILE_NATIVE " > " DEVNULL) == 1)
 					{ printf ("[FAILED] Could not execute native EXE!\n"); }
 			}
 			break;
@@ -16294,16 +16525,21 @@ int StartGame (void *unused)
 				{ snprintf (sMute, 200, "%s", " -c \"mixer master 0\""); }
 			snprintf (sSystem, 200, "dosbox%s %s -noconsole > %s", sMute,
 				BATCH_FILE_POP2, DEVNULL);
-			if (system (sSystem) == -1)
+			if (SystemCommandFailed (sSystem) == 1)
 				{ printf ("[FAILED] Could not execute PoP2 batch file!\n"); }
 			break;
 		case 3:
+			if (HasShellMeta (sSNESFile) == 1)
+			{
+				printf ("[FAILED] Unsafe SNES ROM file name: %s!\n", sSNESFile);
+				return (EXIT_ERROR);
+			}
 			if (iNoAudio == 1)
 				{ snprintf (sMute, 200, "%s", " -ds"); }
 					else { snprintf (sMute, 200, "%s", " -s"); }
 			snprintf (sSystem, 200, "zsnes%s \"%s\" > %s", sMute,
 				sSNESFile, DEVNULL);
-			if (system (sSystem) == -1)
+			if (SystemCommandFailed (sSystem) == 1)
 				{ printf ("[FAILED] Could not execute ZSNES!\n"); }
 			if (iModified == 1) { ModifyBack(); }
 			break;
@@ -16317,8 +16553,8 @@ int StartGameS (void *unused)
 	if (unused != NULL) { } /*** To prevent warnings. ***/
 
 	PlaySound ("wav/playtest.wav");
-	if (system ("cd " POP1_DIR " && "
-		HERE BATCH_FILE_NATIVE " > " DEVNULL) == -1)
+	if (SystemCommandFailed ("cd " POP1_DIR " && "
+		HERE BATCH_FILE_NATIVE " > " DEVNULL) == 1)
 		{ printf ("[FAILED] Could not execute SDLPoP!\n"); }
 
 	return (EXIT_NORMAL);
@@ -16330,11 +16566,85 @@ int StartGameM (void *unused)
 	if (unused != NULL) { } /*** To prevent warnings. ***/
 
 	PlaySound ("wav/playtest.wav");
-	if (system ("cd " POP1_DIR " && "
-		HERE BATCH_FILE_NATIVE " > " DEVNULL) == -1)
+	if (SystemCommandFailed ("cd " POP1_DIR " && "
+		HERE BATCH_FILE_NATIVE " > " DEVNULL) == 1)
 		{ printf ("[FAILED] Could not execute MININIM!\n"); }
 
 	return (EXIT_NORMAL);
+}
+/*****************************************************************************/
+int SystemExitCode (int iStatus)
+/*****************************************************************************/
+{
+#if defined WIN32 || _WIN32 || WIN64 || _WIN64
+	return (iStatus);
+#else
+	if (WIFEXITED (iStatus) == 0) { return (-1); }
+
+	return (WEXITSTATUS (iStatus));
+#endif
+}
+/*****************************************************************************/
+int SystemCommandFailed (const char *sCommand)
+/*****************************************************************************/
+{
+	int iStatus;
+	int iExit;
+
+	iStatus = system (sCommand);
+	if (iStatus == -1) { return (1); }
+	iExit = SystemExitCode (iStatus);
+	if (iExit != 0) { return (1); }
+
+	return (0);
+}
+/*****************************************************************************/
+int PRCommandFailed (const char *sCommand, int iExpectedExit)
+/*****************************************************************************/
+{
+	int iStatus;
+	int iExit;
+
+	iStatus = system (sCommand);
+	if (iStatus == -1) { return (1); }
+	iExit = SystemExitCode (iStatus);
+	if (iExit == -1) { return (1); }
+	if (iExit == 0) { return (0); }
+	if (iExit == iExpectedExit) { return (0); }
+
+	return (1);
+}
+/*****************************************************************************/
+int HasShellMeta (char *sString)
+/*****************************************************************************/
+{
+	int iLoop;
+
+	for (iLoop = 0; sString[iLoop] != '\0'; iLoop++)
+	{
+		switch (sString[iLoop])
+		{
+			case '$':
+			case '`':
+			case '"':
+			case ';':
+			case '&':
+			case '|':
+			case '<':
+			case '>':
+			case '(':
+			case ')':
+			case '\n':
+			case '\r':
+				return (1);
+#if !(defined WIN32 || _WIN32 || WIN64 || _WIN64)
+			case '\\':
+				return (1);
+#endif
+		}
+	}
+
+	return (0);
 }
 /*****************************************************************************/
 int UPack (void *unused)
@@ -16342,7 +16652,7 @@ int UPack (void *unused)
 {
 	if (unused != NULL) { } /*** To prevent warnings. ***/
 
-	if (system ("dosbox upack.bat -noconsole > " DEVNULL) == -1)
+	if (SystemCommandFailed ("dosbox upack.bat -noconsole > " DEVNULL) == 1)
 		{ printf ("[FAILED] Could not execute upack batch file!\n"); }
 	return (EXIT_NORMAL);
 }
@@ -16780,7 +17090,10 @@ void ShowScreen (int iScreenS, SDL_Renderer *screen)
 			{
 				iDone[iTemp] = 0;
 			}
-			ShowRooms (arKidRoom[1], iStartRoomsX, iStartRoomsY, 1);
+			if (IsValidRoomNr (arKidRoom[1]) == 1)
+			{
+				ShowRooms (arKidRoom[1], iStartRoomsX, iStartRoomsY, 1);
+			}
 			iUnusedRooms = 0;
 			for (iTemp = 1; iTemp <= iRooms; iTemp++)
 			{
@@ -17297,6 +17610,7 @@ void WhereToStart (void)
 /*****************************************************************************/
 {
 	int iTemp;
+
 	iMinX = 0;
 	iMaxX = 0;
 	iMinY = 0;
@@ -17305,6 +17619,12 @@ void WhereToStart (void)
 	for (iTemp = 1; iTemp <= iRooms; iTemp++)
 	{
 		iDone[iTemp] = 0;
+	}
+	if (IsValidRoomNr (arKidRoom[1]) == 0)
+	{
+		iStartRoomsX = 12;
+		iStartRoomsY = 12;
+		return;
 	}
 	CheckSides (arKidRoom[1], 0, 0);
 
@@ -17315,12 +17635,14 @@ void WhereToStart (void)
 void CheckSides (int iRoom, int iX, int iY)
 /*****************************************************************************/
 {
+	int iLink;
+
 	if (iX < iMinX) { iMinX = iX; }
 	if (iY < iMinY) { iMinY = iY; }
 	if (iX > iMaxX) { iMaxX = iX; }
 	if (iY > iMaxY) { iMaxY = iY; }
 
-	if ((iEditPoP == 3) && (iRoom > 24))
+	if (IsValidRoomNr (iRoom) == 0)
 	{
 		printf ("[ WARN ] Found an impossible room link in level %lu: %i\n",
 			luLevelNr, iRoom); return;
@@ -17328,29 +17650,17 @@ void CheckSides (int iRoom, int iX, int iY)
 
 	iDone[iRoom] = 1;
 
-	if ((iRoomConnections[iRoom][1] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][1] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][1] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][1]] != 1))
-		{ CheckSides (iRoomConnections[iRoom][1], iX - 1, iY); }
+	if ((GetValidRoomLink (iRoom, 1, &iLink) == 1) && (iDone[iLink] != 1))
+		{ CheckSides (iLink, iX - 1, iY); }
 
-	if ((iRoomConnections[iRoom][2] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][2] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][2] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][2]] != 1))
-		{ CheckSides (iRoomConnections[iRoom][2], iX + 1, iY); }
+	if ((GetValidRoomLink (iRoom, 2, &iLink) == 1) && (iDone[iLink] != 1))
+		{ CheckSides (iLink, iX + 1, iY); }
 
-	if ((iRoomConnections[iRoom][3] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][3] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][3] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][3]] != 1))
-		{ CheckSides (iRoomConnections[iRoom][3], iX, iY - 1); }
+	if ((GetValidRoomLink (iRoom, 3, &iLink) == 1) && (iDone[iLink] != 1))
+		{ CheckSides (iLink, iX, iY - 1); }
 
-	if ((iRoomConnections[iRoom][4] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][4] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][4] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][4]] != 1))
-		{ CheckSides (iRoomConnections[iRoom][4], iX, iY + 1); }
+	if ((GetValidRoomLink (iRoom, 4, &iLink) == 1) && (iDone[iLink] != 1))
+		{ CheckSides (iLink, iX, iY + 1); }
 }
 /*****************************************************************************/
 void ShowRooms (int iRoom, int iX, int iY, int iNext)
@@ -17358,6 +17668,13 @@ void ShowRooms (int iRoom, int iX, int iY, int iNext)
 {
 	char sOnGrid[MAX_GRID + 2];
 	char sTemp[MAX_GRID + 2];
+	int iLink;
+
+	if ((iRoom != -1) && (IsValidRoomNr (iRoom) == 0))
+	{
+		printf ("[ WARN ] Not showing invalid room: %i!\n", iRoom);
+		return;
+	}
 
 	if (iX < 10)
 	{
@@ -17407,31 +17724,19 @@ void ShowRooms (int iRoom, int iX, int iY, int iNext)
 
 	if (iRoom != -1) { iDone[iRoom] = 1; }
 
-	if (iNext == 1)
+	if ((iNext == 1) && (iRoom != -1))
 	{
-		if ((iRoomConnections[iRoom][1] != 0) && /*** DOS ***/
-			(iRoomConnections[iRoom][1] != 254) && /*** SNES ***/
-			(iRoomConnections[iRoom][1] != 255) && /*** SNES ***/
-			(iDone[iRoomConnections[iRoom][1]] != 1))
-			{ ShowRooms (iRoomConnections[iRoom][1], iX - 1, iY, 1); }
+		if ((GetValidRoomLink (iRoom, 1, &iLink) == 1) && (iDone[iLink] != 1))
+			{ ShowRooms (iLink, iX - 1, iY, 1); }
 
-		if ((iRoomConnections[iRoom][2] != 0) && /*** DOS ***/
-			(iRoomConnections[iRoom][2] != 254) && /*** SNES ***/
-			(iRoomConnections[iRoom][2] != 255) && /*** SNES ***/
-			(iDone[iRoomConnections[iRoom][2]] != 1))
-			{ ShowRooms (iRoomConnections[iRoom][2], iX + 1, iY, 1); }
+		if ((GetValidRoomLink (iRoom, 2, &iLink) == 1) && (iDone[iLink] != 1))
+			{ ShowRooms (iLink, iX + 1, iY, 1); }
 
-		if ((iRoomConnections[iRoom][3] != 0) && /*** DOS ***/
-			(iRoomConnections[iRoom][3] != 254) && /*** SNES ***/
-			(iRoomConnections[iRoom][3] != 255) && /*** SNES ***/
-			(iDone[iRoomConnections[iRoom][3]] != 1))
-			{ ShowRooms (iRoomConnections[iRoom][3], iX, iY - 1, 1); }
+		if ((GetValidRoomLink (iRoom, 3, &iLink) == 1) && (iDone[iLink] != 1))
+			{ ShowRooms (iLink, iX, iY - 1, 1); }
 
-		if ((iRoomConnections[iRoom][4] != 0) && /*** DOS ***/
-			(iRoomConnections[iRoom][4] != 254) && /*** SNES ***/
-			(iRoomConnections[iRoom][4] != 255) && /*** SNES ***/
-			(iDone[iRoomConnections[iRoom][4]] != 1))
-			{ ShowRooms (iRoomConnections[iRoom][4], iX, iY + 1, 1); }
+		if ((GetValidRoomLink (iRoom, 4, &iLink) == 1) && (iDone[iLink] != 1))
+			{ ShowRooms (iLink, iX, iY + 1, 1); }
 	}
 }
 /*****************************************************************************/
@@ -17443,6 +17748,9 @@ void SetMapHover (int iRoom, int iX, int iY)
 
 	/*** Used for looping. ***/
 	int iTileLoop;
+	int iLink;
+
+	if (IsValidRoomNr (iRoom) == 0) { return; }
 
 	fRoomStartX = MapGridStartX() + ZoomGet() + ((iX - 1) * (51 * ZoomGet()));
 	fRoomStartY = MapGridStartY() + ZoomGet() + ((iY - 1) * (31 * ZoomGet()));
@@ -17489,29 +17797,17 @@ void SetMapHover (int iRoom, int iX, int iY)
 
 	iDone[iRoom] = 1;
 
-	if ((iRoomConnections[iRoom][1] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][1] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][1] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][1]] != 1))
-		{ SetMapHover (iRoomConnections[iRoom][1], iX - 1, iY); }
+	if ((GetValidRoomLink (iRoom, 1, &iLink) == 1) && (iDone[iLink] != 1))
+		{ SetMapHover (iLink, iX - 1, iY); }
 
-	if ((iRoomConnections[iRoom][2] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][2] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][2] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][2]] != 1))
-		{ SetMapHover (iRoomConnections[iRoom][2], iX + 1, iY); }
+	if ((GetValidRoomLink (iRoom, 2, &iLink) == 1) && (iDone[iLink] != 1))
+		{ SetMapHover (iLink, iX + 1, iY); }
 
-	if ((iRoomConnections[iRoom][3] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][3] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][3] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][3]] != 1))
-		{ SetMapHover (iRoomConnections[iRoom][3], iX, iY - 1); }
+	if ((GetValidRoomLink (iRoom, 3, &iLink) == 1) && (iDone[iLink] != 1))
+		{ SetMapHover (iLink, iX, iY - 1); }
 
-	if ((iRoomConnections[iRoom][4] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][4] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][4] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][4]] != 1))
-		{ SetMapHover (iRoomConnections[iRoom][4], iX, iY + 1); }
+	if ((GetValidRoomLink (iRoom, 4, &iLink) == 1) && (iDone[iLink] != 1))
+		{ SetMapHover (iLink, iX, iY + 1); }
 }
 /*****************************************************************************/
 void ShowRoomsMap (int iRoom, int iX, int iY)
@@ -17523,6 +17819,13 @@ void ShowRoomsMap (int iRoom, int iX, int iY)
 	float fRoomStartX, fRoomStartY;
 	char sText[MAX_TEXT + 2];
 	int iB1, iB2, iB3, iB4;
+	int iLink;
+
+	if (IsValidRoomNr (iRoom) == 0)
+	{
+		printf ("[ WARN ] Not showing invalid map room: %i!\n", iRoom);
+		return;
+	}
 
 	/*** Used for looping. ***/
 	int iTileLoop;
@@ -17680,29 +17983,17 @@ void ShowRoomsMap (int iRoom, int iX, int iY)
 
 	iDone[iRoom] = 1;
 
-	if ((iRoomConnections[iRoom][1] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][1] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][1] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][1]] != 1))
-		{ ShowRoomsMap (iRoomConnections[iRoom][1], iX - 1, iY); }
+	if ((GetValidRoomLink (iRoom, 1, &iLink) == 1) && (iDone[iLink] != 1))
+		{ ShowRoomsMap (iLink, iX - 1, iY); }
 
-	if ((iRoomConnections[iRoom][2] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][2] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][2] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][2]] != 1))
-		{ ShowRoomsMap (iRoomConnections[iRoom][2], iX + 1, iY); }
+	if ((GetValidRoomLink (iRoom, 2, &iLink) == 1) && (iDone[iLink] != 1))
+		{ ShowRoomsMap (iLink, iX + 1, iY); }
 
-	if ((iRoomConnections[iRoom][3] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][3] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][3] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][3]] != 1))
-		{ ShowRoomsMap (iRoomConnections[iRoom][3], iX, iY - 1); }
+	if ((GetValidRoomLink (iRoom, 3, &iLink) == 1) && (iDone[iLink] != 1))
+		{ ShowRoomsMap (iLink, iX, iY - 1); }
 
-	if ((iRoomConnections[iRoom][4] != 0) && /*** DOS ***/
-		(iRoomConnections[iRoom][4] != 254) && /*** SNES ***/
-		(iRoomConnections[iRoom][4] != 255) && /*** SNES ***/
-		(iDone[iRoomConnections[iRoom][4]] != 1))
-		{ ShowRoomsMap (iRoomConnections[iRoom][4], iX, iY + 1); }
+	if ((GetValidRoomLink (iRoom, 4, &iLink) == 1) && (iDone[iLink] != 1))
+		{ ShowRoomsMap (iLink, iX, iY + 1); }
 }
 /*****************************************************************************/
 void InitPopUp (void)
@@ -25222,7 +25513,7 @@ int ChecksumOrWrite (int iFd)
 			snprintf (sToWrite, MAX_TOWRITE, "%c", iThingA[iTemp][iTemp2]);
 			if (iFd == -1)
 				{ lSum+=sToWrite[0]; }
-					else { write (iFd, sToWrite, 1); }
+					else { WriteAll (iFd, sToWrite, 1, "level data"); }
 		}
 	}
 
@@ -25238,14 +25529,14 @@ int ChecksumOrWrite (int iFd)
 				snprintf (sToWrite, MAX_TOWRITE, "%c", iModifierA[iTemp][iTemp2][1]);
 				if (iFd == -1)
 					{ lSum+=sToWrite[0]; }
-						else { write (iFd, sToWrite, 1); }
+						else { WriteAll (iFd, sToWrite, 1, "level data"); }
 			} else {
 				snprintf (sToWrite, MAX_TOWRITE, "%c%c%c%c",
 					iModifierA[iTemp][iTemp2][1], iModifierA[iTemp][iTemp2][2],
 					iModifierA[iTemp][iTemp2][3], iModifierA[iTemp][iTemp2][4]);
 				if (iFd == -1)
 					{ for (iSC = 0; iSC < 4; iSC++) { lSum+=sToWrite[iSC]; } }
-						else { write (iFd, sToWrite, 4); }
+						else { WriteAll (iFd, sToWrite, 4, "level data"); }
 			}
 		}
 	}
@@ -25268,7 +25559,7 @@ int ChecksumOrWrite (int iFd)
 				iPoP2DoorLeft[iTemp], iPoP2DoorRight[iTemp]);
 			if (iFd == -1)
 				{ for (iSC = 0; iSC < 5; iSC++) { lSum+=sToWrite[iSC]; } }
-					else { write (iFd, sToWrite, 5); }
+					else { WriteAll (iFd, sToWrite, 5, "level data"); }
 		}
 	}
 
@@ -25281,7 +25572,7 @@ int ChecksumOrWrite (int iFd)
 			iRoomConnections[((int)((iTemp - 1) / 4)) + 1][((iTemp - 1) % 4) + 1]);
 		if (iFd == -1)
 			{ lSum+=sToWrite[0]; }
-				else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 	}
 
 /*** PoP1 = 2048; PoP2 = 6208 ***/
@@ -25318,13 +25609,13 @@ int ChecksumOrWrite (int iFd)
 				arKidClr[1]);
 		if (iFd == -1)
 			{ for (iSC = 0; iSC < 64; iSC++) { lSum+=sToWrite[iSC]; } }
-				else { write (iFd, sToWrite, 64); }
+				else { WriteAll (iFd, sToWrite, 64, "level data"); }
 	} else {
 		/*** Instead of saving sLastRoom; always use 32. ***/
 		snprintf (sToWrite, MAX_TOWRITE, "%c", 32);
 		if (iFd == -1)
 			{ lSum+=sToWrite[0]; }
-				else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 
 		if (iFd == -1)
 			{ for (iSC = 0; iSC < 4; iSC++) { lSum+=sJEFF[iSC]; } }
@@ -25332,15 +25623,15 @@ int ChecksumOrWrite (int iFd)
 		snprintf (sToWrite, MAX_TOWRITE, "%c", iEXEEnvPoP2);
 		if (iFd == -1)
 			{ lSum+=sToWrite[0]; }
-				else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 		if (iFd == -1)
 			{ lSum+=sUnknownI[0]; }
-				else { write (iFd, sUnknownI, 1); }
+				else { WriteAll (iFd, sUnknownI, 1, "level data"); }
 
 		/*** Instead of saving sLevelInit; fixes gameplay lv2 problem. ***/
 		if (iFd == -1)
 			{ lSum+=sLevelNumber[0]; }
-				else { write (iFd, sLevelNumber, 1); }
+				else { WriteAll (iFd, sLevelNumber, 1, "level data"); }
 
 		/*** Instead of saving sExtraImgResources; enable more resources. ***/
 		if (iEXEEnvPoP2 == 0x05)
@@ -25381,7 +25672,7 @@ int ChecksumOrWrite (int iFd)
 		}
 		if (iFd == -1)
 			{ for (iSC = 0; iSC < 24; iSC++) { lSum+=sToWrite[iSC]; } }
-				else { write (iFd, sToWrite, 24); }
+				else { WriteAll (iFd, sToWrite, 24, "level data"); }
 	}
 
 /*** PoP1 = 2112; PoP2 = 6240 ***/
@@ -25389,11 +25680,11 @@ int ChecksumOrWrite (int iFd)
 	snprintf (sToWrite, MAX_TOWRITE, "%c", arKidRoom[1]);
 	if (iFd == -1)
 		{ lSum+=sToWrite[0]; }
-			else { write (iFd, sToWrite, 1); }
+			else { WriteAll (iFd, sToWrite, 1, "level data"); }
 	snprintf (sToWrite, MAX_TOWRITE, "%c", arKidPos[1] - 1);
 	if (iFd == -1)
 		{ lSum+=sToWrite[0]; }
-			else { write (iFd, sToWrite, 1); }
+			else { WriteAll (iFd, sToWrite, 1, "level data"); }
 	snprintf (sToWrite, MAX_TOWRITE, "%c", FixDir (arKidDir[1]));
 	/*** 3 of 4 (DOS) ***/
 	if (iEditPoP != 1)
@@ -25410,7 +25701,7 @@ int ChecksumOrWrite (int iFd)
 	}
 	if (iFd == -1)
 		{ lSum+=sToWrite[0]; }
-			else { write (iFd, sToWrite, 1); }
+			else { WriteAll (iFd, sToWrite, 1, "level data"); }
 
 /*** PoP1 = 2115; PoP2 = 6243 ***/
 
@@ -25457,13 +25748,13 @@ int ChecksumOrWrite (int iFd)
 		snprintf (sToWrite, MAX_TOWRITE, "%c", iEXEGuardTypePoP2);
 		if (iFd == -1)
 			{ lSum+=sToWrite[0]; }
-				else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 		for (iTemp = 0; iTemp < iRooms; iTemp++)
 		{
 			snprintf (sToWrite, MAX_TOWRITE, "%c", iStaticGuards_Amount[iTemp]);
 			if (iFd == -1)
 				{ lSum+=sToWrite[0]; }
-					else { write (iFd, sToWrite, 1); }
+					else { WriteAll (iFd, sToWrite, 1, "level data"); }
 			for (iTemp2 = 0; iTemp2 < 5; iTemp2++)
 			{
 				if (iStaticGuards_16_Type[iTemp][iTemp2] != 2)
@@ -25519,7 +25810,7 @@ int ChecksumOrWrite (int iFd)
 					iStaticGuards_23_Unknown[iTemp][iTemp2]);
 				if (iFd == -1)
 					{ for (iSC = 0; iSC < 23; iSC++) { lSum+=sToWrite[iSC]; } }
-						else { write (iFd, sToWrite, 23); }
+						else { WriteAll (iFd, sToWrite, 23, "level data"); }
 			}
 		}
 		snprintf (sToWrite, MAX_TOWRITE, "%c%c%c%c%c%c%c%c%c%c"
@@ -25531,25 +25822,25 @@ int ChecksumOrWrite (int iFd)
 			iCheckPoints[15], iCheckPoints[16], iCheckPoints[17]);
 		if (iFd == -1)
 			{ for (iSC = 0; iSC < 18; iSC++) { lSum+=sToWrite[iSC]; } }
-				else { write (iFd, sToWrite, 18); }
+				else { WriteAll (iFd, sToWrite, 18, "level data"); }
 		for (iTemp = 0; iTemp < iRooms; iTemp++)
 		{
 			snprintf (sToWrite, MAX_TOWRITE, "%c", iDynamicGuards_Sets[iTemp]);
 			if (iFd == -1)
 				{ lSum+=sToWrite[0]; }
-					else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 			snprintf (sToWrite, MAX_TOWRITE, "%c", iDynamicGuards_Skill[iTemp]);
 			if (iFd == -1)
 				{ lSum+=sToWrite[0]; }
-					else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 			snprintf (sToWrite, MAX_TOWRITE, "%c", iDynamicGuards_Unknown1[iTemp]);
 			if (iFd == -1)
 				{ lSum+=sToWrite[0]; }
-					else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 			snprintf (sToWrite, MAX_TOWRITE, "%c", iDynamicGuards_Unknown2[iTemp]);
 			if (iFd == -1)
 				{ lSum+=sToWrite[0]; }
-					else { write (iFd, sToWrite, 1); }
+				else { WriteAll (iFd, sToWrite, 1, "level data"); }
 			for (iTemp2 = 0; iTemp2 < 3; iTemp2++)
 			{
 				snprintf (sToWrite, MAX_TOWRITE,
@@ -25566,7 +25857,7 @@ int ChecksumOrWrite (int iFd)
 					iDynamicGuards_10_Hitpoints[iTemp][iTemp2]);
 				if (iFd == -1)
 					{ for (iSC = 0; iSC < 10; iSC++) { lSum+=sToWrite[iSC]; } }
-						else { write (iFd, sToWrite, 10); }
+						else { WriteAll (iFd, sToWrite, 10, "level data"); }
 			}
 		}
 		if (iFd == -1)
@@ -25614,7 +25905,7 @@ void SavePLV (char *sFileName)
 	WriteCharByChar (iFd, sNumberOfFields, 4);
 	WriteCharByChar (iFd, sLevelSize, 4);
 	snprintf (sToWrite, MAX_TOWRITE, "%c", ChecksumOrWrite (-1));
-	write (iFd, sToWrite, 1);
+	WriteAll (iFd, sToWrite, 1, "level file");
 
 	ChecksumOrWrite (iFd);
 
@@ -25626,24 +25917,24 @@ void SavePLV (char *sFileName)
 			sToTemp[7 - (2 * iTemp)]);
 		sscanf (sToWrite, "%x", &iHex);
 		snprintf (sToWrite, MAX_TOWRITE, "%c", iHex);
-		write (iFd, sToWrite, 1);
+		WriteAll (iFd, sToWrite, 1, "level file");
 	}
 
 	WriteUserData (iFd, 1);
 
-	close (iFd);
+	CloseFileChecked (iFd, "level file");
 
 	if (iEditPoP != 2)
 	{
-		if (system (PR_EXECUTABLE " -i -f --resource=" PR_RESOURCES
-			" " LEVELS_DAT " > " DEVNULL) == -1)
+		if (PRCommandFailed (PR_EXECUTABLE " -i -f --resource=" PR_RESOURCES
+			" " LEVELS_DAT " > " DEVNULL, 16) == 1)
 		{
 			printf ("[FAILED] Could not import the PoP1 levels: %s!\n",
 				strerror (errno)); exit (EXIT_ERROR);
 		}
 	} else {
-		if (system (PR_EXECUTABLE " -ilevels2 -f --resource=" PR_POP2
-			" " PRINCE_DAT " > " DEVNULL) == -1)
+		if (PRCommandFailed (PR_EXECUTABLE " -ilevels2 -f --resource=" PR_POP2
+			" " PRINCE_DAT " > " DEVNULL, 1) == 1)
 		{
 			printf ("[FAILED] Could not import the PoP2 levels: %s!\n",
 				strerror (errno)); exit (EXIT_ERROR);
@@ -25667,10 +25958,10 @@ int WriteUserData (int iFd, int iType)
 	for (iTemp = 1; iTemp <= iInformationNr; iTemp++)
 	{
 		snprintf (sToWrite, MAX_TOWRITE, "%s", sInformation[iTemp][0]);
-		if (iType == 1) { write (iFd, sToWrite, strlen (sToWrite)); }
+		if (iType == 1) { WriteString (iFd, sToWrite, "user data"); }
 			else { iChars += strlen (sToWrite); }
 		snprintf (sToWrite, MAX_TOWRITE, "%c", 0x00);
-		if (iType == 1) { write (iFd, sToWrite, 1); }
+		if (iType == 1) { WriteAll (iFd, sToWrite, 1, "user data"); }
 			else { iChars += 1; }
 		if (strcmp (sInformation[iTemp][0], "Editor Name") == 0)
 		{
@@ -25693,14 +25984,58 @@ int WriteUserData (int iFd, int iType)
 		{
 			snprintf (sToWrite, MAX_TOWRITE, "%s", sInformation[iTemp][1]);
 		}
-		if (iType == 1) { write (iFd, sToWrite, strlen (sToWrite)); }
+		if (iType == 1) { WriteString (iFd, sToWrite, "user data"); }
 			else { iChars += strlen (sToWrite); }
 		snprintf (sToWrite, MAX_TOWRITE, "%c", 0x00);
-		if (iType == 1) { write (iFd, sToWrite, 1); }
+		if (iType == 1) { WriteAll (iFd, sToWrite, 1, "user data"); }
 			else { iChars += 1; }
 	}
 
 	return (iChars);
+}
+/*****************************************************************************/
+void WriteAll (int iFd, const void *pData, size_t zSize, const char *sWhat)
+/*****************************************************************************/
+{
+	const char *pBytes;
+	size_t zDone;
+	ssize_t iWritten;
+
+	pBytes = pData;
+	zDone = 0;
+	while (zDone < zSize)
+	{
+		iWritten = write (iFd, pBytes + zDone, zSize - zDone);
+		if (iWritten == -1)
+		{
+			if (errno == EINTR) { continue; }
+			printf ("[FAILED] Could not write %s: %s!\n", sWhat,
+				strerror (errno));
+			exit (EXIT_ERROR);
+		}
+		if (iWritten == 0)
+		{
+			printf ("[FAILED] Could not write %s!\n", sWhat);
+			exit (EXIT_ERROR);
+		}
+		zDone += (size_t)iWritten;
+	}
+}
+/*****************************************************************************/
+void WriteString (int iFd, const char *sString, const char *sWhat)
+/*****************************************************************************/
+{
+	WriteAll (iFd, sString, strlen (sString), sWhat);
+}
+/*****************************************************************************/
+void CloseFileChecked (int iFd, const char *sWhat)
+/*****************************************************************************/
+{
+	if (close (iFd) == -1)
+	{
+		printf ("[FAILED] Could not close %s: %s!\n", sWhat, strerror (errno));
+		exit (EXIT_ERROR);
+	}
 }
 /*****************************************************************************/
 void WriteCharByChar (int iFd, unsigned char *sString, int iLength)
@@ -25712,21 +26047,29 @@ void WriteCharByChar (int iFd, unsigned char *sString, int iLength)
 	for (iTemp = 0; iTemp < iLength; iTemp++)
 	{
 		snprintf (sToWrite, MAX_TOWRITE, "%c", sString[iTemp]);
-		write (iFd, sToWrite, 1);
+		WriteAll (iFd, sToWrite, 1, "file");
 	}
 }
 /*****************************************************************************/
 int AddCharByChar (unsigned char *sTo, int iToSize,
-	unsigned char *sString, int iLength)
+	int iToMax, unsigned char *sString, int iLength)
 /*****************************************************************************/
 {
 	int iLoop;
 
+	if ((iToSize < 0) || (iLength < 0) || (iToSize + iLength > iToMax))
+	{
+		printf ("[FAILED] Compressed data is too large!\n");
+		exit (EXIT_ERROR);
+	}
 	for (iLoop = 0; iLoop < iLength; iLoop++)
 	{
 		sTo[iToSize + iLoop] = sString[iLoop];
 	}
-	sTo[iToSize + iLoop + 1] = '\0';
+	if (iToSize + iLength < iToMax)
+	{
+		sTo[iToSize + iLength] = '\0';
+	}
 
 	return (iLength);
 }
@@ -25817,6 +26160,8 @@ void PlaySound (char *sFile)
 	Uint8 *data;
 	Uint32 dlen;
 	SDL_AudioCVT cvt;
+	size_t zAudioSize;
+	size_t zLenMult;
 
 	if ((iNoAudio == 1) || (iSDLAudioOpen != 1)) { return; }
 
@@ -25833,8 +26178,28 @@ void PlaySound (char *sFile)
 		SDL_FreeWAV (data);
 		return;
 	}
+	if (dlen > (Uint32)INT_MAX)
+	{
+		printf ("[ WARN ] Audio file too large: %s.\n", sFile);
+		SDL_FreeWAV (data);
+		return;
+	}
+	if (cvt.len_mult < 0)
+	{
+		printf ("[ WARN ] Invalid audio conversion size for %s.\n", sFile);
+		SDL_FreeWAV (data);
+		return;
+	}
+	zLenMult = (size_t)cvt.len_mult + 1;
+	if ((zLenMult == 0) || ((size_t)dlen > ((size_t)-1) / zLenMult))
+	{
+		printf ("[ WARN ] Audio buffer too large: %s.\n", sFile);
+		SDL_FreeWAV (data);
+		return;
+	}
+	zAudioSize = (size_t)dlen * zLenMult;
 	/*** The "+ 1" is a workaround for SDL bug #2274. ***/
-	cvt.buf = (Uint8 *)malloc (dlen * (cvt.len_mult + 1));
+	cvt.buf = (Uint8 *)malloc (zAudioSize);
 	if (cvt.buf == NULL)
 	{
 		printf ("[ WARN ] Could not allocate audio buffer for %s.\n", sFile);
@@ -26260,42 +26625,70 @@ void CreateBAK (void)
 	FILE *fDAT;
 	FILE *fBAK;
 	int iData;
+	char *sDATName;
+	char *sBAKName;
 
 	switch (iEditPoP)
 	{
-		case 1: fDAT = fopen (LEVELS_DAT, "rb"); break;
-		case 2: fDAT = fopen (PRINCE_DAT, "rb"); break;
-		case 3: fDAT = fopen (sSNESFile, "rb"); break;
+		case 1: sDATName = LEVELS_DAT; sBAKName = LEVELS_BAK; break;
+		case 2: sDATName = PRINCE_DAT; sBAKName = PRINCE_BAK; break;
+		case 3: sDATName = sSNESFile; sBAKName = SNES_BAK; break;
 		default:
 			printf ("[FAILED] Impossible iEditPoP value: %i!\n", iEditPoP);
 			exit (EXIT_ERROR); break;
 	}
+
+	fDAT = fopen (sDATName, "rb");
 	if (fDAT == NULL)
-		{ printf ("[FAILED] Could not open %s: %s!\n",
-			LEVELS_DAT, strerror (errno)); }
-
-	switch (iEditPoP)
 	{
-		case 1: fBAK = fopen (LEVELS_BAK, "wb"); break;
-		case 2: fBAK = fopen (PRINCE_BAK, "wb"); break;
-		case 3: fBAK = fopen (SNES_BAK, "wb"); break;
-		default:
-			printf ("[FAILED] Impossible iEditPoP value: %i!\n", iEditPoP);
-			exit (EXIT_ERROR); break;
+		printf ("[FAILED] Could not open %s: %s!\n", sDATName,
+			strerror (errno));
+		exit (EXIT_ERROR);
 	}
+
+	fBAK = fopen (sBAKName, "wb");
 	if (fBAK == NULL)
-		{ printf ("[FAILED] Could not open %s: %s!\n",
-			LEVELS_BAK, strerror (errno)); }
+	{
+		printf ("[FAILED] Could not open %s: %s!\n", sBAKName,
+			strerror (errno));
+		fclose (fDAT);
+		exit (EXIT_ERROR);
+	}
 
 	while (1)
 	{
 		iData = fgetc (fDAT);
 		if (iData == EOF) { break; }
-			else { putc (iData, fBAK); }
+		else if (putc (iData, fBAK) == EOF)
+		{
+			printf ("[FAILED] Could not write %s: %s!\n", sBAKName,
+				strerror (errno));
+			fclose (fDAT);
+			fclose (fBAK);
+			exit (EXIT_ERROR);
+		}
 	}
 
-	fclose (fDAT);
-	fclose (fBAK);
+	if (ferror (fDAT) != 0)
+	{
+		printf ("[FAILED] Could not read %s: %s!\n", sDATName,
+			strerror (errno));
+		fclose (fDAT);
+		fclose (fBAK);
+		exit (EXIT_ERROR);
+	}
+	if (fclose (fDAT) != 0)
+	{
+		printf ("[FAILED] Could not close %s: %s!\n", sDATName,
+			strerror (errno));
+		exit (EXIT_ERROR);
+	}
+	if (fclose (fBAK) != 0)
+	{
+		printf ("[FAILED] Could not close %s: %s!\n", sBAKName,
+			strerror (errno));
+		exit (EXIT_ERROR);
+	}
 }
 /*****************************************************************************/
 void Help (void)
@@ -31239,20 +31632,161 @@ void LoadLevel (int iLevel)
 	iYPosMapMoveOffset = 0;
 }
 /*****************************************************************************/
-void GetOptionValue (char *sArgv, char *sValue)
+void GetOptionValue (char *sArgv, char *sValue, int iMax)
 /*****************************************************************************/
 {
-	int iTemp;
-	char sTemp[MAX_OPTION + 2];
+	char *sEquals;
 
-	iTemp = strlen (sArgv) - 1;
-	snprintf (sValue, MAX_OPTION, "%s", "");
-	while (sArgv[iTemp] != '=')
+	if (iMax <= 0) { return; }
+	sEquals = strchr (sArgv, '=');
+	if (sEquals == NULL)
 	{
-		snprintf (sTemp, MAX_OPTION, "%c%s", sArgv[iTemp], sValue);
-		snprintf (sValue, MAX_OPTION, "%s", sTemp);
-		iTemp--;
+		snprintf (sValue, iMax, "%s", "");
+		return;
 	}
+	snprintf (sValue, iMax, "%s", sEquals + 1);
+}
+/*****************************************************************************/
+void ValidateEXETypeForGame (int iGame)
+/*****************************************************************************/
+{
+	int iValid;
+
+	if ((strcmp (sEXEType, "") == 0) ||
+		(strcmp (sEXEType, "missing") == 0) ||
+		(strcmp (sEXEType, "unknown") == 0))
+	{
+		return;
+	}
+
+	iValid = 0;
+	switch (iGame)
+	{
+		case 1:
+			if ((strcmp (sEXEType, "p0") == 0) ||
+				(strcmp (sEXEType, "u0") == 0) ||
+				(strcmp (sEXEType, "p3") == 0) ||
+				(strcmp (sEXEType, "u3") == 0) ||
+				(strcmp (sEXEType, "p4") == 0) ||
+				(strcmp (sEXEType, "u4") == 0))
+			{
+				iValid = 1;
+			}
+			break;
+		case 2:
+			if ((strcmp (sEXEType, "F0") == 0) ||
+				(strcmp (sEXEType, "F1") == 0) ||
+				(strcmp (sEXEType, "IR") == 0) ||
+				(strcmp (sEXEType, "D0") == 0) ||
+				(strcmp (sEXEType, "D1") == 0))
+			{
+				iValid = 1;
+			}
+			break;
+		case 3:
+			if ((strcmp (sEXEType, "JP") == 0) ||
+				(strcmp (sEXEType, "US") == 0) ||
+				(strcmp (sEXEType, "EU") == 0))
+			{
+				iValid = 1;
+			}
+			break;
+	}
+
+	if (iValid == 0)
+	{
+		switch (iGame)
+		{
+			case 1:
+				printf ("[FAILED] Executable type \"%s\" is not valid for PoP1!\n",
+					sEXEType);
+				break;
+			case 2:
+				printf ("[FAILED] Executable type \"%s\" is not valid for PoP2!\n",
+					sEXEType);
+				break;
+			case 3:
+				printf ("[FAILED] Executable type \"%s\" is not valid for SNES!\n",
+					sEXEType);
+				break;
+		}
+		exit (EXIT_ERROR);
+	}
+}
+/*****************************************************************************/
+int IsNoRoomLink (int iRoom)
+/*****************************************************************************/
+{
+	if (iRoom == 0) { return (1); }
+	if ((iEditPoP == 3) && ((iRoom == 254) || (iRoom == 255)))
+		{ return (1); }
+
+	return (0);
+}
+/*****************************************************************************/
+int IsValidRoomNr (int iRoom)
+/*****************************************************************************/
+{
+	if ((iRoom >= 1) && (iRoom <= iRooms)) { return (1); }
+
+	return (0);
+}
+/*****************************************************************************/
+void RequireValidRoomNr (int iRoom, char *sWhat)
+/*****************************************************************************/
+{
+	if (IsValidRoomNr (iRoom) == 0)
+	{
+		printf ("[FAILED] Invalid room for %s: %i!\n", sWhat, iRoom);
+		exit (EXIT_ERROR);
+	}
+}
+/*****************************************************************************/
+void RequireValidLocationNr (int iLocation, char *sWhat)
+/*****************************************************************************/
+{
+	if ((iLocation < 1) || (iLocation > 30))
+	{
+		printf ("[FAILED] Invalid location for %s: %i!\n", sWhat, iLocation);
+		exit (EXIT_ERROR);
+	}
+}
+/*****************************************************************************/
+void ValidateRoomLinksLoaded (void)
+/*****************************************************************************/
+{
+	int iRoom;
+	int iSide;
+	int iLink;
+
+	for (iRoom = 1; iRoom <= iRooms; iRoom++)
+	{
+		for (iSide = 1; iSide <= 4; iSide++)
+		{
+			iLink = iRoomConnections[iRoom][iSide];
+			if ((IsNoRoomLink (iLink) == 0) && (IsValidRoomNr (iLink) == 0))
+			{
+				printf ("[FAILED] Invalid room link: room %i side %i -> %i!\n",
+					iRoom, iSide, iLink);
+				exit (EXIT_ERROR);
+			}
+		}
+	}
+}
+/*****************************************************************************/
+int GetValidRoomLink (int iRoom, int iSide, int *iLink)
+/*****************************************************************************/
+{
+	*iLink = iRoomConnections[iRoom][iSide];
+	if (IsNoRoomLink (*iLink) == 1) { return (0); }
+	if (IsValidRoomNr (*iLink) == 0)
+	{
+		printf ("[ WARN ] Ignoring invalid room link: room %i side %i -> %i!\n",
+			iRoom, iSide, *iLink);
+		return (0);
+	}
+
+	return (1);
 }
 /*****************************************************************************/
 void FlipRoom (int iRoom, int iAxis)
@@ -31781,24 +32315,24 @@ mkdir (XML_DIR, 0700);
 
 	snprintf (sToWrite, MAX_TOWRITE, "%s",
 		"<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n");
-	write (iFd, sToWrite, strlen (sToWrite));
+	WriteString (iFd, sToWrite, "XML file");
 	DateTime (sDateTime);
 	snprintf (sToWrite, MAX_TOWRITE,
 		"<!-- PoP1 level, exported %s with %s %s. -->\n",
 		sDateTime, EDITOR_NAME, EDITOR_VERSION);
-	write (iFd, sToWrite, strlen (sToWrite));
+	WriteString (iFd, sToWrite, "XML file");
 	snprintf (sToWrite, MAX_TOWRITE, "<level number=\"%lu\">\n",
 		luLevelNr);
-	write (iFd, sToWrite, strlen (sToWrite));
+	WriteString (iFd, sToWrite, "XML file");
 
 	/*** rooms ***/
-	write (iFd, "\t<rooms>\n", 9);
+	WriteAll (iFd, "\t<rooms>\n", 9, "XML file");
 	for (iTemp = 1; iTemp <= iRooms; iTemp++)
 	{
 		snprintf (sToWrite, MAX_TOWRITE,
 			"\t\t<room number=\"%i\">\n",
 			iTemp);
-		write (iFd, sToWrite, strlen (sToWrite));
+		WriteString (iFd, sToWrite, "XML file");
 
 		/*** tiles ***/
 		for (iTile = 0; iTile <= 29; iTile++)
@@ -31806,7 +32340,7 @@ mkdir (XML_DIR, 0700);
 			snprintf (sToWrite, MAX_TOWRITE,
 				"\t\t\t<tile element=\"%i\" modifier=\"%i\" />\n",
 				iThingA[iTemp][iTile], iModifierA[iTemp][iTile][1]);
-			write (iFd, sToWrite, strlen (sToWrite));
+			WriteString (iFd, sToWrite, "XML file");
 		}
 
 		/*** guard ***/
@@ -31828,30 +32362,30 @@ mkdir (XML_DIR, 0700);
 			"\t\t\t<guard location=\"%i\" direction=\"%i\""
 			" skill=\"%i\" colors=\"%i\" />\n",
 			iGuardLocation, iGuardDirection, iGuardSkillS, iGuardColors);
-		write (iFd, sToWrite, strlen (sToWrite));
+		WriteString (iFd, sToWrite, "XML file");
 
 		/*** links ***/
 		snprintf (sToWrite, MAX_TOWRITE,
 			"\t\t\t<links left=\"%i\" right=\"%i\" up=\"%i\" down=\"%i\" />\n",
 			iRoomConnections[iTemp][1], iRoomConnections[iTemp][2],
 			iRoomConnections[iTemp][3], iRoomConnections[iTemp][4]);
-		write (iFd, sToWrite, strlen (sToWrite));
+		WriteString (iFd, sToWrite, "XML file");
 
-		write (iFd, "\t\t</room>\n", 10);
+		WriteAll (iFd, "\t\t</room>\n", 10, "XML file");
 	}
-	write (iFd, "\t</rooms>\n", 10);
+	WriteAll (iFd, "\t</rooms>\n", 10, "XML file");
 
 	/*** events ***/
-	write (iFd, "\t<events>\n", 10);
+	WriteAll (iFd, "\t<events>\n", 10, "XML file");
 	for (iTemp = 0; iTemp < 256; iTemp++)
 	{
 		snprintf (sToWrite, MAX_TOWRITE,
 			"\t\t<event number=\"%i\" room=\"%i\" location=\"%i\" next=\"%i\" />\n",
 			iTemp + 1, EventInfo (iTemp, 1),
 			EventInfo (iTemp, 2), EventInfo (iTemp, 3));
-		write (iFd, sToWrite, strlen (sToWrite));
+		WriteString (iFd, sToWrite, "XML file");
 	}
-	write (iFd, "\t</events>\n", 11);
+	WriteAll (iFd, "\t</events>\n", 11, "XML file");
 
 	/*** prince ***/
 	switch (arKidDir[1])
@@ -31870,12 +32404,12 @@ mkdir (XML_DIR, 0700);
 	snprintf (sToWrite, MAX_TOWRITE,
 		"\t<prince room=\"%i\" location=\"%i\" direction=\"%i\" />\n",
 		arKidRoom[1], arKidPos[1], iKidDir);
-	write (iFd, sToWrite, strlen (sToWrite));
+	WriteString (iFd, sToWrite, "XML file");
 
 	/*** userdata ***/
 	snprintf (sToWrite, MAX_TOWRITE,
 		"\t<userdata fields=\"%lu\">\n", luNumberOfFields);
-	write (iFd, sToWrite, strlen (sToWrite));
+	WriteString (iFd, sToWrite, "XML file");
 	for (iTemp = 1; iTemp <= iInformationNr; iTemp++)
 	{
 		snprintf (sKey, 102, "%s", sInformation[iTemp][0]);
@@ -31892,13 +32426,13 @@ mkdir (XML_DIR, 0700);
 		snprintf (sToWrite, MAX_TOWRITE,
 			"\t\t<field key=\"%s\" value=\"%s\" />\n",
 			sKey, sValue);
-		write (iFd, sToWrite, strlen (sToWrite));
+		WriteString (iFd, sToWrite, "XML file");
 	}
-	write (iFd, "\t</userdata>\n", 13);
+	WriteAll (iFd, "\t</userdata>\n", 13, "XML file");
 
-	write (iFd, "</level>\n", 9);
+	WriteAll (iFd, "</level>\n", 9, "XML file");
 
-	close (iFd);
+	CloseFileChecked (iFd, "XML file");
 }
 /*****************************************************************************/
 void PoP1OrPoP2Action (char *sAction)
@@ -33160,8 +33694,8 @@ void PoP1Basics (void)
 	SDL_Thread *upackthread;
 	int iThreadReturn;
 
-	if (system (PR_EXECUTABLE " -x -f --resource=" PR_RESOURCES
-		" " LEVELS_DAT " > " DEVNULL) == -1)
+	if (PRCommandFailed (PR_EXECUTABLE " -x -f --resource=" PR_RESOURCES
+		" " LEVELS_DAT " > " DEVNULL, 16) == 1)
 	{
 		printf ("[FAILED] Could not export the levels: %s!\n", strerror (errno));
 		exit (EXIT_ERROR);
@@ -33170,6 +33704,7 @@ void PoP1Basics (void)
 	iRoomLinks = 24 * 4;
 	iTileW = 120; iTileH = 155;
 	if ((iStartLevel < 0) || (iStartLevel > 15)) { iStartLevel = 1; }
+	ValidateEXETypeForGame (1);
 
 	/*** Figure out the executable's type. ***/
 	if (strcmp (sEXEType, "") == 0)
@@ -33314,8 +33849,8 @@ void PoP2Basics (void)
 {
 	struct stat stStatus;
 
-	if (system (PR_EXECUTABLE " -xlevels2 -f --resource=" PR_POP2
-		" " PRINCE_DAT " > " DEVNULL) == -1)
+	if (PRCommandFailed (PR_EXECUTABLE " -xlevels2 -f --resource=" PR_POP2
+		" " PRINCE_DAT " > " DEVNULL, 1) == 1)
 	{
 		printf ("[FAILED] Could not export the levels: %s!\n", strerror (errno));
 		exit (EXIT_ERROR);
@@ -33324,6 +33859,7 @@ void PoP2Basics (void)
 	iRoomLinks = 32 * 4;
 	iTileW = 116; iTileH = 154;
 	if ((iStartLevel < 1) || (iStartLevel > 28)) { iStartLevel = 1; }
+	ValidateEXETypeForGame (2);
 
 	/*** Figure out the executable's type. ***/
 	if (strcmp (sEXEType, "") == 0)
@@ -33381,6 +33917,7 @@ void PoP1SNESBasics (void)
 	iRoomLinks = 24 * 4;
 	iTileW = 98; iTileH = 130;
 	if ((iStartLevel < 1) || (iStartLevel > 27)) { iStartLevel = 1; }
+	ValidateEXETypeForGame (3);
 
 	/*** Check for the header. ***/
 	stat (sSNESFile, &stStatus);
@@ -33631,7 +34168,8 @@ int BackKey (SDL_Event event, char cKey, int iLoc)
 	{
 		iShift = 1;
 	}
-	if (iShift == 1) { cRealKey = toupper (cKey); } else { cRealKey = cKey; }
+	if (iShift == 1) { cRealKey = toupper ((unsigned char)cKey); }
+		else { cRealKey = cKey; }
 	if (cCurType == 'r')
 	{
 		switch (cRealKey)
@@ -34119,54 +34657,64 @@ int strpos (char *sHaystack, char *sNeedle, int iOffset)
 		else { return ((sTemp - sHaystackTemp) + iOffset); }
 }
 /*****************************************************************************/
-void XMLValue (char *sLine, char *sKey, char *sValue)
+int XMLValue (char *sLine, char *sKey, char *sValue)
 /*****************************************************************************/
 {
-	int iKeyLocation;
-	int iCheckLocation;
-	char sRetTemp[MAX_DATA + 2];
-	char cChar;
-	int iEOV;
+	char sNeedle[MAX_DATA + 2];
+	char *sStart;
+	char *sEnd;
+	int iLength;
 
-	iKeyLocation = strpos (sLine, sKey, 0);
-	iCheckLocation = iKeyLocation + strlen (sKey) + 2;
 	snprintf (sValue, MAX_DATA, "%s", "");
-	iEOV = 0;
-	do {
-		cChar = sLine[iCheckLocation];
-		if (cChar != '"')
-		{
-			snprintf (sRetTemp, MAX_DATA, "%s", sValue);
-			snprintf (sValue, MAX_DATA, "%s%c", sRetTemp, cChar);
-			iCheckLocation++;
-		} else {
-			iEOV = 1;
-		}
-	} while (iEOV != 1);
+	snprintf (sNeedle, MAX_DATA, "%s=\"", sKey);
+	sStart = strstr (sLine, sNeedle);
+	if (sStart == NULL) { return (0); }
+	sStart+=strlen (sNeedle);
+	sEnd = strchr (sStart, '"');
+	if (sEnd == NULL) { return (0); }
+	iLength = (int)(sEnd - sStart);
+	if (iLength >= MAX_DATA) { return (0); }
+	memcpy (sValue, sStart, iLength);
+	sValue[iLength] = '\0';
+
+	return (1);
 }
 /*****************************************************************************/
-void XMLTag (char *sLine, char *sTag)
+void RequireXMLValue (char *sLine, char *sKey, char *sValue, int iLine)
+/*****************************************************************************/
+{
+	if (XMLValue (sLine, sKey, sValue) == 0)
+	{
+		printf ("[FAILED] Missing XML attribute \"%s\" on line %i!\n",
+			sKey, iLine);
+		exit (EXIT_ERROR);
+	}
+}
+/*****************************************************************************/
+int XMLTag (char *sLine, char *sTag)
 /*****************************************************************************/
 {
 	int iCheckLocation;
-	char sRetTemp[MAX_DATA + 2];
 	char cChar;
-	int iEOT;
 
 	snprintf (sTag, MAX_DATA, "%s", "");
+	if (sLine[0] != '<') { return (0); }
 	iCheckLocation = 1;
-	iEOT = 0;
-	do {
+	while (1)
+	{
 		cChar = sLine[iCheckLocation];
+		if (cChar == '\0') { return (0); }
 		if ((cChar != ' ') && (cChar != '>'))
 		{
-			snprintf (sRetTemp, MAX_DATA, "%s", sTag);
-			snprintf (sTag, MAX_DATA, "%s%c", sRetTemp, cChar);
+			if (iCheckLocation >= MAX_DATA) { return (0); }
+			sTag[iCheckLocation - 1] = cChar;
+			sTag[iCheckLocation] = '\0';
 			iCheckLocation++;
 		} else {
-			iEOT = 1;
+			if (iCheckLocation == 1) { return (0); }
+			return (1);
 		}
-	} while (iEOT != 1);
+	}
 }
 /*****************************************************************************/
 int Block (int iRoom, int iLocation, char *sBlock)
@@ -36456,7 +37004,7 @@ void StringToLower (char *sInput, char *sOutput)
 
 	for (iLoop = 0; sInput[iLoop] != '\0'; iLoop++)
 	{
-		sOutput[iLoop] = tolower (sInput[iLoop]);
+		sOutput[iLoop] = tolower ((unsigned char)sInput[iLoop]);
 	}
 	sOutput[iLoop] = '\0';
 }
@@ -37997,12 +38545,18 @@ void ShowMap (void)
 
 	/*** Get hover. ***/
 	iMapHoverYes = 0;
-	for (iTemp = 1; iTemp <= iRooms; iTemp++) { iDone[iTemp] = 0; }
-	SetMapHover (arKidRoom[1], iStartRoomsX, iStartRoomsY);
+	if (IsValidRoomNr (arKidRoom[1]) == 1)
+	{
+		for (iTemp = 1; iTemp <= iRooms; iTemp++) { iDone[iTemp] = 0; }
+		SetMapHover (arKidRoom[1], iStartRoomsX, iStartRoomsY);
+	}
 	if (iMapHoverYes == 0) { iMapHoverRoom = 0; }
 
-	for (iTemp = 1; iTemp <= iRooms; iTemp++) { iDone[iTemp] = 0; }
-	ShowRoomsMap (arKidRoom[1], iStartRoomsX, iStartRoomsY);
+	if (IsValidRoomNr (arKidRoom[1]) == 1)
+	{
+		for (iTemp = 1; iTemp <= iRooms; iTemp++) { iDone[iTemp] = 0; }
+		ShowRoomsMap (arKidRoom[1], iStartRoomsX, iStartRoomsY);
+	}
 
 	ShowImageBasic (imgmap, 0, 0, "imgmap", mscreen, 1, 1);
 
@@ -38353,6 +38907,7 @@ int DownloadAndUnzipTo (char *sURLBase, char *sURLFile, char *sDir)
 	struct zip *zip;
 	struct zip_stat zips;
 	struct zip_file *zipf;
+	zip_error_t ziperr;
 	/***/
 	CURL *curl;
 	CURLcode res;
@@ -38362,8 +38917,9 @@ int DownloadAndUnzipTo (char *sURLBase, char *sURLFile, char *sDir)
 	char sLocation[MAX_LOCATION + 2];
 	int iLength;
 	int iFd;
-	unsigned long ulTotal;
-	int iChars;
+	zip_uint64_t ulTotal;
+	zip_int64_t zRead;
+	ssize_t szWritten;
 	char sBuffer[100];
 	int iDeleted;
 	char sError[MAX_ERROR + 2];
@@ -38385,16 +38941,20 @@ int DownloadAndUnzipTo (char *sURLBase, char *sURLFile, char *sDir)
 		return (0);
 	} else {
 		fFile = fopen ("temp.zip", "wb");
+		if (fFile == NULL)
+		{
+			printf ("[ WARN ] Could not create \"temp.zip\": %s!\n",
+				strerror (errno));
+			curl_easy_cleanup (curl);
+			return (0);
+		}
 		snprintf (sURL, 500, "%s%s", sURLBase, sURLFile);
 		curl_easy_setopt (curl, CURLOPT_URL, sURL);
 		curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, WriteData);
 		curl_easy_setopt (curl, CURLOPT_WRITEDATA, fFile);
 		curl_easy_setopt (curl, CURLOPT_FAILONERROR, 1L);
-		/* Without this, the Windows port will say "Peer certificate cannot be
-		 * authenticated with given CA certificates!". This may be related to
-		 * the (old?) cURL version.
-		 */
-		curl_easy_setopt (curl, CURLOPT_SSL_VERIFYPEER, 0);
+		curl_easy_setopt (curl, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt (curl, CURLOPT_SSL_VERIFYHOST, 2L);
 		/*** Without this, the connect timeout will be 300 seconds. ***/
 		curl_easy_setopt (curl, CURLOPT_CONNECTTIMEOUT, 5L);
 		res = curl_easy_perform (curl);
@@ -38409,6 +38969,7 @@ int DownloadAndUnzipTo (char *sURLBase, char *sURLFile, char *sDir)
 			printf ("[ WARN ] %s\n", sWarning);
 			SDL_ShowSimpleMessageBox (SDL_MESSAGEBOX_ERROR,
 				"Warning", sWarning, NULL);
+			return (0);
 		}
 	}
 
@@ -38416,7 +38977,9 @@ int DownloadAndUnzipTo (char *sURLBase, char *sURLFile, char *sDir)
 	zip = zip_open ("temp.zip", 0, &iError);
 	if (zip == NULL)
 	{
-		zip_error_to_str (sError, sizeof (sError), iError, errno);
+		zip_error_init_with_code (&ziperr, iError);
+		snprintf (sError, MAX_ERROR, "%s", zip_error_strerror (&ziperr));
+		zip_error_fini (&ziperr);
 		printf ("[ WARN ] Cannot open \"temp.zip\": %s!\n", sError);
 		return (0);
 	} else {
@@ -38428,28 +38991,93 @@ int DownloadAndUnzipTo (char *sURLBase, char *sURLFile, char *sDir)
 				/*** sZipsName is zips.name without the top-level directory. ***/
 				char sZipsName[MAX_LOCATION + 2];
 				char *sFromSlash = strchr (zips.name, '/');
-				int iOffset = (int)(sFromSlash - zips.name + 1);
+				int iOffset;
+				if (sFromSlash == NULL)
+				{
+					printf ("[ WARN ] ZIP entry has no top-level directory: %s!\n",
+						zips.name);
+					zip_close (zip);
+					return (0);
+				}
+				iOffset = (int)(sFromSlash - zips.name + 1);
 				iLength = strlen (zips.name) - iOffset;
+				if ((iLength <= 0) || (iLength >= MAX_LOCATION))
+				{
+					printf ("[ WARN ] Unsafe ZIP entry length: %s!\n", zips.name);
+					zip_close (zip);
+					return (0);
+				}
 				memcpy (sZipsName, &zips.name[iOffset], iLength);
 				sZipsName[iLength] = '\0';
+				if ((sZipsName[0] == '/') || (strstr (sZipsName, "..") != NULL) ||
+					(strchr (sZipsName, '\\') != NULL))
+				{
+					printf ("[ WARN ] Unsafe ZIP entry path: %s!\n", sZipsName);
+					zip_close (zip);
+					return (0);
+				}
 
-				snprintf (sLocation, MAX_LOCATION, "%s%s%s",
+				iLength = snprintf (sLocation, MAX_LOCATION, "%s%s%s",
 					sDir, SLASH, sZipsName);
+				if ((iLength < 0) || (iLength >= MAX_LOCATION))
+				{
+					printf ("[ WARN ] ZIP output path is too long: %s!\n", sZipsName);
+					zip_close (zip);
+					return (0);
+				}
 				iLength = strlen (sZipsName);
 				if (sZipsName[iLength - 1] == '/')
 				{
 					CreateDir (sLocation);
 				} else {
 					zipf = zip_fopen_index (zip, iFileLoop, 0);
-					iFd = open (sLocation, O_WRONLY|O_TRUNC|O_CREAT|O_BINARY, 0600);
-					ulTotal = 0;
-					while (ulTotal != zips.size)
+					if (zipf == NULL)
 					{
-						iChars = zip_fread (zipf, sBuffer, 100);
-						write (iFd, sBuffer, iChars);
-						ulTotal+=iChars;
+						printf ("[ WARN ] Could not read ZIP entry: %s!\n", sZipsName);
+						zip_close (zip);
+						return (0);
 					}
-					close (iFd);
+					iFd = open (sLocation, O_WRONLY|O_TRUNC|O_CREAT|O_BINARY, 0600);
+					if (iFd == -1)
+					{
+						printf ("[ WARN ] Could not create %s: %s!\n",
+							sLocation, strerror (errno));
+						zip_fclose (zipf);
+						zip_close (zip);
+						return (0);
+					}
+					ulTotal = 0;
+					while (ulTotal < zips.size)
+					{
+						zRead = zip_fread (zipf, sBuffer, 100);
+						if (zRead <= 0)
+						{
+							printf ("[ WARN ] Could not read ZIP entry: %s!\n", sZipsName);
+							close (iFd);
+							zip_fclose (zipf);
+							zip_close (zip);
+							return (0);
+						}
+						szWritten = write (iFd, sBuffer, (size_t)zRead);
+						if (szWritten != zRead)
+						{
+							printf ("[ WARN ] Could not write %s: %s!\n",
+								sLocation, strerror (errno));
+							close (iFd);
+							zip_fclose (zipf);
+							zip_close (zip);
+							return (0);
+						}
+						ulTotal+=(zip_uint64_t)zRead;
+					}
+					if (close (iFd) == -1)
+					{
+						printf ("[ WARN ] Could not close %s: %s!\n",
+							sLocation, strerror (errno));
+						zip_fclose (zipf);
+						zip_close (zip);
+						return (0);
+					}
 					zip_fclose (zipf);
 				}
 			}
@@ -41239,7 +41867,8 @@ void RemoveSpaces (char *sString, int iToUpper)
 		{
 			if (iToUpper == 0)
 				{ sString[iPos] = sString[iLoopChar]; }
-					else { sString[iPos] = toupper (sString[iLoopChar]); }
+					else { sString[iPos] =
+						toupper ((unsigned char)sString[iLoopChar]); }
 			iPos++;
 		}
 	}
@@ -41938,9 +42567,10 @@ void HexEditorKey (char cAdd)
 	{
 		if (cHexInput == ' ')
 		{
-			cHexInput = toupper (cAdd);
+			cHexInput = toupper ((unsigned char)cAdd);
 		} else {
-			snprintf (sString, MAX_DATA, "%c%c", cHexInput, toupper (cAdd));
+			snprintf (sString, MAX_DATA, "%c%c", cHexInput,
+				toupper ((unsigned char)cAdd));
 			luAdd = strtoul (sString, NULL, 16);
 			sHexBytes[iHexCursor] = luAdd;
 			/***/
